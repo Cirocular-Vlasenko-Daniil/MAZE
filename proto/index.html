@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAZE — прототип экрана</title>
+<style>
+  :root {
+    --bg: #111214; --panel: #1b1d21; --line: #2b2e34; --text: #d7dbe2; --dim: #8a909a;
+    --accent: #e6eeff; --key: #26292f; --key-on: #e6eeff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: .04em; }
+  h2 { font-size: 14px; margin: 32px 0 12px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+  p.sub { margin: 0 0 20px; color: var(--dim); }
+  .device { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .oled { background: #000; border-radius: 6px; padding: 12px; display: inline-block; max-width: 100%; }
+  #screen { display: block; width: 768px; max-width: 100%; image-rendering: pixelated; }
+  .row { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .keys { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { appearance: none; border: 1px solid var(--line); background: var(--key); color: var(--text); border-radius: 8px;
+           padding: 9px 14px; font: 600 12px/1 inherit; letter-spacing: .06em; cursor: pointer; min-width: 58px; }
+  button:active { background: #353943; }
+  button.latched { background: var(--key-on); color: #000; }
+  .enc { display: flex; gap: 4px; align-items: center; }
+  .enc button { min-width: 40px; }
+  #b-sw { border-radius: 50%; width: 42px; height: 42px; min-width: 0; padding: 0; }
+  .one { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: 12px; }
+  #screen1 { image-rendering: pixelated; background: #000; }
+  #status { color: var(--dim); font: 12px/1.4 ui-monospace, Menlo, monospace; margin-top: 12px; }
+  .opts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin-top: 18px; font-size: 13px; }
+  .opts > span { color: var(--dim); }
+  .opts label { margin-right: 14px; white-space: nowrap; cursor: pointer; }
+  table.help { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.help td { border-top: 1px solid var(--line); padding: 6px 8px 6px 0; vertical-align: top; }
+  table.help td:first-child { white-space: nowrap; color: var(--accent); font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding-right: 16px; }
+  #sheet { display: flex; flex-wrap: wrap; gap: 18px 24px; }
+  figure { margin: 0; }
+  figure canvas { display: block; image-rendering: pixelated; background: #000; border-radius: 4px; }
+  figcaption { color: var(--dim); font-size: 12px; margin-top: 6px; max-width: 460px; }
+  #fxcodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 24px; }
+  .fx { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .fx canvas { image-rendering: pixelated; border-radius: 3px; }
+  .fx em { color: var(--dim); font-style: normal; font-size: 12px; margin-left: auto; }
+  @media (max-width: 600px) { .opts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>MAZE</h1>
+  <p class="sub">Прототип главного экрана для ESPidi: карта 4×8, экран 128×32, один бит на пиксель, шрифт — из прошивки KALEIDOSCOPE.</p>
+
+  <div class="device">
+    <div class="oled"><canvas id="screen" width="768" height="192"></canvas></div>
+    <div class="row">
+      <div class="keys">
+        <button id="b-tap" title="T">TAP</button>
+        <button id="b-play" title="P">PLAY</button>
+        <button id="b-page" title="G">PAGE</button>
+      </div>
+      <div class="enc">
+        <button id="b-left" title="←">◀</button>
+        <button id="b-sw" title="Enter">●</button>
+        <button id="b-right" title="→">▶</button>
+      </div>
+      <div class="one">1:1 <canvas id="screen1" width="128" height="32"></canvas></div>
+    </div>
+    <div id="status"></div>
+    <div class="opts">
+      <span>Ещё</span>
+      <div><label><input type="checkbox" id="sound"> звук</label><label><input type="checkbox" id="sync"> клок на MIDI IN</label><label><input type="number" id="extbpm" value="120" min="40" max="255" style="width:56px;background:#1b1d21;color:inherit;border:1px solid #2b2e34;border-radius:6px;padding:2px 4px"> BPM</label><button id="ext-start" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Start</button> <button id="ext-stop" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Stop</button> <button id="ext-cont" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Continue</button><button id="reset" type="button" style="min-width:0;padding:4px 10px;font-weight:500">очистить слоты</button></div>
+    </div>
+  </div>
+
+  <h2>Управление</h2>
+  <table class="help">
+    <tr><td>T / клик TAP</td><td>TAP — модификатор. Мышью: клик «защёлкивает» TAP до следующего действия.</td></tr>
+    <tr><td>T T / два клика</td><td>TAP+TAP — старт / пауза. Пауза оставляет указатели на месте; при продолжении сетка начинается заново с тех же позиций. Если на MIDI IN идёт клок, MAZE ведомый (EXT): старт — с ближайшего шага внешнего клока; Stop с входа — пауза, Start и Continue — как TAP+TAP.</td></tr>
+    <tr><td>← →, колесо</td><td>Энкодер — курсор по X (заворот в том же ряду). С TAP — по Y.</td></tr>
+    <tr><td>Enter</td><td>Кнопка энкодера (по отпусканию) — правка тайла. Удерживать на карте — стереть тайл, в линии — стереть цепь маршрута (тайлы остаются). С карты — карта остаётся, параметры в панели: в шапке NOTE и нота или FX и команда. Из маршрута в линию (PAGE) — расширенный вид: соседи 3×3 и подсказка внизу, как в LSDj. PAGE листает NOTE → FX → COND; энкодер — значение, TAP+энкодер — параметр, Enter — выход. «RT» — как у маршрута. COND: IF — условие, TRG — условие по счёту, как у Elektron: A:B — на A-м из каждых B проходов (под ним показ: квадрат — сработает, точка — пропуск, инверсия — последний проход), PRE / /PRE — сработал ли последний эффект, мимо которого прошёл указатель.</td></tr>
+    <tr><td>T + Enter</td><td>Рисовать маршрут в фокусе от клетки курсора. Enter ставит точку, путь до курсора строится кратчайший в обход пройденных клеток; войти можно только в первую — это замыкание. До 16 клеток. Двойной Enter — готово, PLAY — отмена.</td></tr>
+    <tr><td>P</td><td>PLAY — следующий маршрут (1→4), по отпусканию; удерживать PLAY — мьют маршрута в фокусе (молчит, но указатель идёт и эффекты срабатывают; вкладка зачёркнута, указатель шахматкой). TAP+PLAY — настройки маршрута: скорость, конец, MIDI-канал, velocity и длина ноты по умолчанию. Открытый маршрут: LOOP, PONG или REV — с конца цепи назад; замкнутый: FWD или REV.</td></tr>
+    <tr><td>T + G</td><td>TAP+PAGE — проекты (32 слота). T + энкодер — слот, энкодер — темп загруженного проекта (на чужом слоте не действует); удерживать Enter — LOAD (во время игры — с начала такта), удерживать T+Enter — SAVE; шкала заполняется. PAGE или PLAY — выход. Сохраняется исходник: сдвиги и повороты от эффектов не пишутся, LOAD возвращает карту к исходнику. Автосохранение — только черновику (слот был пустым или уже писался автосохранением); после SAVE слот защищён, «+» — есть несохранённое.</td></tr>
+    <tr><td>G</td><td>PAGE — карта ↔ маршрут в линию. В линии энкодер идёт по шагам маршрута, Enter правит ноту шага. Удерживать G + энкодер — темп.</td></tr>
+  </table>
+
+  <h2>Ассеты</h2>
+  <div id="sheet"></div>
+
+  <h2>Эффекты и условия</h2>
+  <p class="sub">Эффект на тайле не виден. Когда он срабатывает, его буква появляется внизу столбца маршрута справа и остаётся там до следующего — как столбец эффектов в трекере. Условие проверяется, когда указатель приходит на тайл; соседи — все 8 клеток. Изменения тайлов (O, H, V) вступают со следующего шага.</p>
+  <div id="fxcodes"></div>
+</main>
+<script src="../assets/font/kaleidoscope_font.js"></script>
+<script src="../assets/maze_assets.js"></script>
+<script src="maze.js"></script>
+</body>
+</html>

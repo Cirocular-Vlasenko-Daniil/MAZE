@@ -1,0 +1,10 @@
+{
+  "espidi": 1,
+  "sketch": "MAZE",
+  "firmware": "espidi/MAZE.ino.bin",
+  "cover": "cover.png",
+  "summary": {
+    "en": "Esoteric tile sequencer: draw up to four routes across a 4×8 map, pointers walk them and play the notes in the tiles; tiles carry effects that ratchet, transpose, rotate and shift the map.",
+    "ru": "Эзотерический тайловый секвенсер: рисуешь до четырёх маршрутов по карте 4×8, указатели ходят по ним и играют ноты из тайлов; эффекты тайлов дают ретчеты, транспонируют, поворачивают и сдвигают карту."
+  }
+}
