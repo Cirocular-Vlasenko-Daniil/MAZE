@@ -45,6 +45,9 @@
   .fx canvas { image-rendering: pixelated; border-radius: 3px; }
   .fx em { color: var(--dim); font-style: normal; font-size: 12px; margin-left: auto; }
   @media (max-width: 600px) { .opts { grid-template-columns: 1fr; } }
+  .keys button { min-width: 0; padding: 4px 6px; font-weight: 500; font-size: 11px; }
+  .keys .k.sharp { background: #111316; }
+  .keys small { color: #6b7080; }
 </style>
 </head>
 <body>
@@ -71,6 +74,8 @@
     <div class="opts">
       <span>Ещё</span>
       <div><label><input type="checkbox" id="sound"> звук</label><label><input type="checkbox" id="sync"> клок на MIDI IN</label><label><input type="number" id="extbpm" value="120" min="40" max="255" style="width:56px;background:#1b1d21;color:inherit;border:1px solid #2b2e34;border-radius:6px;padding:2px 4px"> BPM</label><button id="ext-start" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Start</button> <button id="ext-stop" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Stop</button> <button id="ext-cont" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Continue</button><button id="reset" type="button" style="min-width:0;padding:4px 10px;font-weight:500">очистить слоты</button></div>
+      <span>MIDI IN</span>
+      <div class="keys"><button id="oct-dn" type="button">−</button><span id="midi-keys"></span><button id="oct-up" type="button">+</button> <small>ноты транспонируют фразу, если поле IN в проектах не OFF (клавиши здесь — канал 1; клавиатура — через Web MIDI)</small></div>
     </div>
   </div>
 
@@ -82,7 +87,7 @@
     <tr><td>Enter</td><td>Кнопка энкодера (по отпусканию) — правка тайла. Удерживать на карте — стереть тайл, в линии — стереть цепь маршрута (тайлы остаются). С карты — карта остаётся, параметры в панели: в шапке NOTE и нота или FX и команда. Из маршрута в линию (PAGE) — расширенный вид: соседи 3×3 и подсказка внизу, как в LSDj. PAGE листает NOTE → FX → COND; энкодер — значение, TAP+энкодер — параметр, Enter — выход. «RT» — как у маршрута. COND: IF — условие, TRG — условие по счёту, как у Elektron: A:B — на A-м из каждых B проходов (под ним показ: квадрат — сработает, точка — пропуск, инверсия — последний проход), PRE / /PRE — сработал ли последний эффект, мимо которого прошёл указатель.</td></tr>
     <tr><td>T + Enter</td><td>Рисовать маршрут в фокусе от клетки курсора. Enter ставит точку, путь до курсора строится кратчайший в обход пройденных клеток; войти можно только в первую — это замыкание. До 16 клеток. Двойной Enter — готово, PLAY — отмена.</td></tr>
     <tr><td>P</td><td>PLAY — следующий маршрут (1→4), по отпусканию; удерживать PLAY — мьют маршрута в фокусе (молчит, но указатель идёт и эффекты срабатывают; вкладка зачёркнута, указатель шахматкой). TAP+PLAY — настройки маршрута: скорость, конец, MIDI-канал, velocity и длина ноты по умолчанию. Открытый маршрут: LOOP, PONG или REV — с конца цепи назад; замкнутый: FWD или REV.</td></tr>
-    <tr><td>T + G</td><td>TAP+PAGE — проекты (32 слота). T + энкодер — слот; энкодер — выбранное поле загруженного проекта: тоника, лад или темп (справа, в плашке; на чужом слоте не действует), T + G — следующее поле; удерживать Enter — LOAD (во время игры — с начала такта), удерживать T+Enter — SAVE; шкала заполняется. PAGE или PLAY — выход. Сохраняется исходник: сдвиги и повороты от эффектов не пишутся, LOAD возвращает карту к исходнику. Автосохранение — только черновику (слот был пустым или уже писался автосохранением); после SAVE слот защищён, «+» — есть несохранённое.</td></tr>
+    <tr><td>T + G</td><td>TAP+PAGE — проекты (32 слота). T + энкодер — слот; энкодер — выбранное поле загруженного проекта: тоника, лад, вход нот IN (общий для устройства) или темп (справа, в плашке; на чужом слоте не действует), T + G — следующее поле; удерживать Enter — LOAD (во время игры — с начала такта), удерживать T+Enter — SAVE; шкала заполняется. PAGE или PLAY — выход. Сохраняется исходник: сдвиги и повороты от эффектов не пишутся, LOAD возвращает карту к исходнику. Автосохранение — только черновику (слот был пустым или уже писался автосохранением); после SAVE слот защищён, «+» — есть несохранённое.</td></tr>
     <tr><td>G</td><td>PAGE — карта ↔ маршрут в линию. В линии энкодер идёт по шагам маршрута, Enter правит ноту шага. Удерживать G + энкодер — темп.</td></tr>
   </table>
 

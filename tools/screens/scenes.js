@@ -141,6 +141,8 @@ projScene('proj_demo', 3);
 projScene('proj_key', 0, st => Object.assign(st, { scale: 10, root: 9 }));
 projScene('proj_key_sel', 0, Object.assign(st => Object.assign(st, { scale: 1, root: 9 }), { after: st => (st.proj.field = 1) }));
 projScene('proj_key_other', 1);
+projScene('proj_in', 0, Object.assign(st => (st.inCh = 1), { after: st => (st.proj.field = 2) }));
+projScene('proj_in_ch', 2, st => (st.inCh = 11));
 
 // лад: та же карта демо 01 в A PMIN — ноты приведены к ладу, записанные не тронуты
 const sc = base();

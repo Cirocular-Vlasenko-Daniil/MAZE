@@ -47,6 +47,9 @@ struct Store {
   // версия демо-проектов, уже разложенных по слотам 01…; 0 — ещё не раскладывали
   virtual int demoVersion() { return 0; }
   virtual void setDemoVersion(int) {}
+  // вход нот с MIDI IN — общий для устройства, не для проекта (IN_OFF, IN_ALL, канал)
+  virtual int inChannel() { return 0; }
+  virtual void setInChannel(int) {}
   virtual ~Store() {}
 };
 
@@ -94,7 +97,8 @@ struct Ui {
   uint8_t projSel = 0;
   Mode projBack = M_MAP;
   uint8_t projHold = 0;  // 1 LOAD, 2 SAVE
-  uint8_t projField = 2;  // что правит энкодер: 0 тоника, 1 лад, 2 темп
+  uint8_t projField = 3;  // что правит энкодер: 0 тоника, 1 лад, 2 вход нот IN, 3 темп
+  uint8_t inCh = 0;  // вход нот с MIDI IN: IN_OFF, IN_ALL, 2…17 — канал 1…16
   uint32_t projT0 = 0, projDone = 0;
   uint8_t projDoneRow = 8;
   int queued = -1;  // слот ждёт начала такта

@@ -237,7 +237,7 @@ struct FileStore : Store {
     uint8_t blob[BLOB];
     bool autoFlag;
   } w[SLOTS];
-  int cur = -1, curPending = -1, demosPending = -1;
+  int cur = -1, curPending = -1, demosPending = -1, inPending = -1;
 
   static String path(int k) {
     char b[32];
@@ -286,6 +286,14 @@ struct FileStore : Store {
     return v < 0 ? 0 : v;
   }
   void setDemoVersion(int v) override { demosPending = v; }
+  int inChannel() override {  // /maze/config: байт 0 — вход нот с MIDI IN
+    if (!ok) return 0;
+    File f = LittleFS.open("/maze/config", "r");
+    int v = f ? f.read() : 0;
+    if (f) f.close();
+    return v < 0 || v > 17 ? 0 : v;
+  }
+  void setInChannel(int v) override { inPending = v; }
   void flush() {
     if (!ok) return;
     for (int k = 0; k < SLOTS; k++) {
@@ -303,6 +311,14 @@ struct FileStore : Store {
         LittleFS.remove(path(k));
         LittleFS.rename(tmp, path(k));  // целиком или никак
         w[k].pending = false;
+      }
+    }
+    if (inPending >= 0) {
+      File f = LittleFS.open("/maze/config", "w");
+      if (f) {
+        f.write((uint8_t)inPending);
+        f.close();
+        inPending = -1;
       }
     }
     if (demosPending >= 0) {  // после слотов: оборвётся запись — демо разложатся заново
@@ -359,11 +375,15 @@ static void onEngineTimer(void *) {
   if (engineTask) xTaskNotifyGive(engineTask);
 }
 
+static MidiIn midiIn;
 static void readMidiIn(uint32_t now) {
   uint8_t count = 0;
   while (midi.available() && count++ < 64) {
     uint8_t b = midi.read();
-    if (b < 0xF8) continue;  // ноты с MIDI IN не принимаются — только клок и транспорт
+    if (b < 0xF8) {  // ноты с MIDI IN только транспонируют фразу (вход — поле IN в проектах)
+      midiIn.feed(S, b, ui.inCh, millis());
+      continue;
+    }
     if (b == 0xF8) {
       if (extSeen) {
         uint32_t dt = now - lastExtUs;

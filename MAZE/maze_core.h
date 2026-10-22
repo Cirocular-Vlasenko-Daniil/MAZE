@@ -170,6 +170,7 @@ struct State {
   int8_t keyPending = KEY_NONE;  // K ждёт начала такта
   uint8_t degShift = 0;       // ступени лада, по кругу внутри октавы
   uint32_t keyFlashUntil = 0;  // мс: звучащая тоника вместо скорости в панели
+  uint8_t held[16] = {};  // клавиши, зажатые на MIDI IN (битами)
   bool ext = false;  // клок на MIDI IN — ведомый
   uint32_t tickUs = 0;  // длина тика: своя или измеренная по внешнему клоку
   uint32_t ticks = 0;   // тиков с начала сетки
@@ -226,7 +227,16 @@ void clearRoute(Route &r);
 constexpr int BLOB_V1 = 4 + 2 + 1 + CELLS * 10 + ROUTES * (7 + MAX_LEN) + 4;
 constexpr int BLOB = BLOB_V1 + 2;
 int serialize(const State &S, uint8_t *out);  // → BLOB байт
-bool deserialize(State &S, const uint8_t *in, int len);  // false — не тот формат
+bool deserialize(State &S, const uint8_t *in, int len);
+
+// MIDI IN: ноты транспонируют фразу — единственное исключение, сами не звучат. Сразу, защёлкой,
+// с октавами от тоники проекта в 4-й октаве; из зажатых берётся нижняя; сбрасывает M и ждущий K.
+constexpr uint8_t IN_OFF = 0, IN_ALL = 1;  // вход нот: 0 — выкл, 1 — все каналы, 2…17 — канал 1…16
+void extNote(State &S, uint8_t note, bool on, uint32_t nowMs);
+struct MidiIn {
+  uint8_t status = 0, d[2] = {}, n = 0;
+  void feed(State &S, uint8_t b, uint8_t inCh, uint32_t nowMs);  // байт с MIDI IN, кроме реалтайма
+};  // false — не тот формат
 void newProject(State &S);  // пустая карта, маршрутов нет
 // миниатюра для экрана проектов: есть ли нота в клетке
 bool blobHasNote(const uint8_t *blob, int c, int r);

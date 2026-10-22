@@ -32,6 +32,9 @@ Inspired by KALEIDOSCOPE (Vadjuse) and ORCA; the Klaatu pixel font comes from th
   A draft autosaves; LOAD while playing waits for the next bar.
 - **5 demo projects** in slots 01–05, shipped with the firmware: MIX, MIDI (note effects), MAP (the map rewrites itself),
   COND (conditions and counters), POINTER (pointer effects and a key progression E → A → B → E, 4 bars each). They go only into empty slots, your projects stay.
+- **Transpose from MIDI IN:** a keyboard or another sequencer moves the whole phrase, like **K** but right away.
+  Latched, with octaves (the project tonic in octave 4 is home), the lowest held key wins. The input channel (IN: OFF, ALL, 1–16)
+  belongs to the device, not to the project. Notes from MIDI IN never sound themselves.
 - **Sync:** internal clock with MIDI clock out, or follows MIDI clock on MIDI IN automatically (EXT); start is quantised to the next step.
 
 ![Tile editor](screens/tile_map_fx.png)
@@ -56,7 +59,7 @@ TAP is a modifier. "Hold" means hold until the bar on screen fills.
 | PAGE + encoder | tempo | |
 | TAP + PAGE | projects | |
 
-**Projects screen:** TAP + encoder — slot; encoder — the selected field of the loaded project (root, scale or tempo, on the right);
+**Projects screen:** TAP + encoder — slot; encoder — the selected field (root, scale, MIDI IN channel or tempo, on the right);
 TAP + PAGE — next field; hold the encoder button — LOAD, hold TAP + encoder button — SAVE; PAGE or PLAY — back.
 
 ## Install

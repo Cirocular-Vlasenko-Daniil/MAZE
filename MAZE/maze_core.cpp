@@ -332,6 +332,40 @@ void applyFx(State &S, Route &r, Cell p, const Fx &fx, Note *notes, int &n, uint
       break;
   }
 }
+void extNote(State &S, uint8_t note, bool on, uint32_t nowMs) {
+  note &= 127;
+  if (!on) {
+    S.held[note >> 3] &= ~(1 << (note & 7));
+    return;  // защёлка: отпустили — тональность остаётся
+  }
+  S.held[note >> 3] |= 1 << (note & 7);
+  int low = note;
+  for (int k = 0; k < 128; k++)
+    if (S.held[k >> 3] >> (k & 7) & 1) {
+      low = k;
+      break;
+    }
+  int shift = low - (60 + S.root);  // от тоники проекта в 4-й октаве (C4 = 60)
+  S.keyShift = shift < -64 ? -64 : shift > 63 ? 63 : shift;
+  S.degShift = 0, S.keyPending = KEY_NONE;
+  S.keyFlashUntil = nowMs + KEY_FLASH_MS;
+}
+void MidiIn::feed(State &S, uint8_t b, uint8_t inCh, uint32_t nowMs) {
+  if (b >= 0xF8) return;  // реалтайм — отдельно
+  if (b & 0x80) {
+    status = b < 0xF0 ? b : 0;  // системные — мимо
+    n = 0;
+    return;
+  }
+  if (!status) return;
+  d[n++] = b;
+  uint8_t type = status & 0xF0;
+  if (n < (type == 0xC0 || type == 0xD0 ? 1 : 2)) return;
+  n = 0;  // running status: следующий байт данных — новое сообщение
+  if (inCh == IN_OFF || (type != 0x90 && type != 0x80)) return;
+  if (inCh != IN_ALL && (status & 0x0F) != inCh - 2) return;
+  extNote(S, d[0], type == 0x90 && d[1] > 0, nowMs);
+}
 int State::soundingRoot() const { return modp(midiOfDeg(key(), degShift) + keyShift, 12); }
 
 // Поворот 8 соседей (тор: за краем — противоположный край) и сдвиги рядов/столбцов.

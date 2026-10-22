@@ -42,6 +42,9 @@ struct MemStore : Store {
   int demoV = 0;
   int demoVersion() override { return demoV; }
   void setDemoVersion(int v) override { demoV = v; }
+  int inV = 0;
+  int inChannel() override { return inV; }
+  void setInChannel(int v) override { inV = v; }
 };
 
 static void blank(State &S) {
@@ -273,6 +276,58 @@ int main() {
       ticks(D, BAR_TICKS - 1);
     }
     ok(!strcmp(seq, "EABEE"), "демо 05: прогрессия E → A → B → E по 4 такта");
+  }
+
+  // ── MIDI IN: ноты транспонируют фразу
+  {
+    State T;
+    blank(T);
+    T.root = 2;  // D: опора — D4 = 62
+    MidiIn in;
+    auto feed = [&](std::initializer_list<uint8_t> bytes, uint8_t ch) {
+      for (uint8_t b : bytes) in.feed(T, b, ch, 1000);
+    };
+    feed({0x90, 64, 100}, IN_OFF);
+    ok(T.keyShift == 0, "MIDI IN: вход OFF — ноты мимо");
+    T.degShift = 3, T.keyPending = 2;
+    feed({0x90, 64, 100}, IN_ALL);
+    ok(T.keyShift == 2 && T.degShift == 0 && T.keyPending == KEY_NONE && T.keyFlashUntil == 1000 + KEY_FLASH_MS, "MIDI IN: E4 при тонике D — +2, сброшены M и ждущий K, вспышка");
+    feed({59, 100}, IN_ALL);  // running status: B3, нажата вместе с E4
+    ok(T.keyShift == -3, "MIDI IN: аккорд — берётся нижняя (B3 → −3), running status");
+    feed({0x80, 59, 0, 0x90, 64, 0}, IN_ALL);  // отпустили обе (note on с нулевой velocity — тоже отпускание)
+    ok(T.keyShift == -3, "MIDI IN: защёлка — отпустили, тональность осталась");
+    feed({0x90, 74, 100}, IN_ALL);
+    ok(T.keyShift == 12, "MIDI IN: с октавами — D5 на октаву выше");
+    feed({0x93, 50, 100}, 2);  // канал 4, а слушаем канал 1
+    ok(T.keyShift == 12, "MIDI IN: чужой канал — мимо");
+    feed({0x80, 74, 0, 0x93, 50, 100}, 5);  // слушаем канал 4
+    ok(T.keyShift == -12, "MIDI IN: свой канал — D3 на октаву ниже");
+    feed({0xB0, 1, 64, 0xF0, 1, 2, 0xF7, 0x90, 62, 1}, IN_ALL);
+    ok(T.keyShift == -12, "MIDI IN: CC и sysex не путают разбор, а D4 всё ещё зажата нижней (D3)");
+    restartGrid(T);
+    ok(T.keyShift == 0, "MIDI IN: старт сбрасывает тональность");
+    // поле IN на экране проектов — общее, пишется отдельно от слотов
+    MemStore st;
+    State P;
+    Ui u;
+    u.S = &P;
+    u.store = &st;
+    st.inV = 5;
+    u.boot(0);
+    ok(u.inCh == 5, "IN: при старте берётся из настроек устройства");
+    u.mode = M_MAP;
+    u.onTapDown(100);
+    u.onPageDown(101);
+    u.onPageUp(102);
+    u.onTapUp(103);
+    for (int k = 0; k < 3; k++) {  // тоника → лад → IN
+      u.onTapDown(110 + 10 * k);
+      u.onPageDown(111 + 10 * k);
+      u.onPageUp(112 + 10 * k);
+      u.onTapUp(113 + 10 * k);
+    }
+    u.onEnc(-4, 200);
+    ok(u.projField == 2 && u.inCh == 1 && st.inV == 1, "IN: TAP+PAGE до поля IN, энкодер — ALL, сохранено");
   }
 
   // ── условие по счёту

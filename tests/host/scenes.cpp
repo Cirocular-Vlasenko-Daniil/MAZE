@@ -170,6 +170,8 @@ int main() {
   proj("proj_key", 0, [](Scene &s) { s.S.scale = 10, s.S.root = 9; }, nullptr);
   proj("proj_key_sel", 0, [](Scene &s) { s.S.scale = 1, s.S.root = 9; }, [](Scene &s) { s.u.projField = 1; });
   proj("proj_key_other", 1, nullptr, nullptr);
+  proj("proj_in", 0, [](Scene &s) { s.u.inCh = IN_ALL; }, [](Scene &s) { s.u.projField = 2; });
+  proj("proj_in_ch", 2, [](Scene &s) { s.u.inCh = 11; }, nullptr);
   {  // лад: карта демо 01 в A PMIN
     Scene s;
     s.S.scale = 10, s.S.root = 9;

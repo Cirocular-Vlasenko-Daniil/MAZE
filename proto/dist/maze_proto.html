@@ -45,6 +45,9 @@
   .fx canvas { image-rendering: pixelated; border-radius: 3px; }
   .fx em { color: var(--dim); font-style: normal; font-size: 12px; margin-left: auto; }
   @media (max-width: 600px) { .opts { grid-template-columns: 1fr; } }
+  .keys button { min-width: 0; padding: 4px 6px; font-weight: 500; font-size: 11px; }
+  .keys .k.sharp { background: #111316; }
+  .keys small { color: #6b7080; }
 </style>
 </head>
 <body>
@@ -71,6 +74,8 @@
     <div class="opts">
       <span>Ещё</span>
       <div><label><input type="checkbox" id="sound"> звук</label><label><input type="checkbox" id="sync"> клок на MIDI IN</label><label><input type="number" id="extbpm" value="120" min="40" max="255" style="width:56px;background:#1b1d21;color:inherit;border:1px solid #2b2e34;border-radius:6px;padding:2px 4px"> BPM</label><button id="ext-start" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Start</button> <button id="ext-stop" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Stop</button> <button id="ext-cont" type="button" style="min-width:0;padding:4px 10px;font-weight:500">Continue</button><button id="reset" type="button" style="min-width:0;padding:4px 10px;font-weight:500">очистить слоты</button></div>
+      <span>MIDI IN</span>
+      <div class="keys"><button id="oct-dn" type="button">−</button><span id="midi-keys"></span><button id="oct-up" type="button">+</button> <small>ноты транспонируют фразу, если поле IN в проектах не OFF (клавиши здесь — канал 1; клавиатура — через Web MIDI)</small></div>
     </div>
   </div>
 
@@ -82,7 +87,7 @@
     <tr><td>Enter</td><td>Кнопка энкодера (по отпусканию) — правка тайла. Удерживать на карте — стереть тайл, в линии — стереть цепь маршрута (тайлы остаются). С карты — карта остаётся, параметры в панели: в шапке NOTE и нота или FX и команда. Из маршрута в линию (PAGE) — расширенный вид: соседи 3×3 и подсказка внизу, как в LSDj. PAGE листает NOTE → FX → COND; энкодер — значение, TAP+энкодер — параметр, Enter — выход. «RT» — как у маршрута. COND: IF — условие, TRG — условие по счёту, как у Elektron: A:B — на A-м из каждых B проходов (под ним показ: квадрат — сработает, точка — пропуск, инверсия — последний проход), PRE / /PRE — сработал ли последний эффект, мимо которого прошёл указатель.</td></tr>
     <tr><td>T + Enter</td><td>Рисовать маршрут в фокусе от клетки курсора. Enter ставит точку, путь до курсора строится кратчайший в обход пройденных клеток; войти можно только в первую — это замыкание. До 16 клеток. Двойной Enter — готово, PLAY — отмена.</td></tr>
     <tr><td>P</td><td>PLAY — следующий маршрут (1→4), по отпусканию; удерживать PLAY — мьют маршрута в фокусе (молчит, но указатель идёт и эффекты срабатывают; вкладка зачёркнута, указатель шахматкой). TAP+PLAY — настройки маршрута: скорость, конец, MIDI-канал, velocity и длина ноты по умолчанию. Открытый маршрут: LOOP, PONG или REV — с конца цепи назад; замкнутый: FWD или REV.</td></tr>
-    <tr><td>T + G</td><td>TAP+PAGE — проекты (32 слота). T + энкодер — слот; энкодер — выбранное поле загруженного проекта: тоника, лад или темп (справа, в плашке; на чужом слоте не действует), T + G — следующее поле; удерживать Enter — LOAD (во время игры — с начала такта), удерживать T+Enter — SAVE; шкала заполняется. PAGE или PLAY — выход. Сохраняется исходник: сдвиги и повороты от эффектов не пишутся, LOAD возвращает карту к исходнику. Автосохранение — только черновику (слот был пустым или уже писался автосохранением); после SAVE слот защищён, «+» — есть несохранённое.</td></tr>
+    <tr><td>T + G</td><td>TAP+PAGE — проекты (32 слота). T + энкодер — слот; энкодер — выбранное поле загруженного проекта: тоника, лад, вход нот IN (общий для устройства) или темп (справа, в плашке; на чужом слоте не действует), T + G — следующее поле; удерживать Enter — LOAD (во время игры — с начала такта), удерживать T+Enter — SAVE; шкала заполняется. PAGE или PLAY — выход. Сохраняется исходник: сдвиги и повороты от эффектов не пишутся, LOAD возвращает карту к исходнику. Автосохранение — только черновику (слот был пустым или уже писался автосохранением); после SAVE слот защищён, «+» — есть несохранённое.</td></tr>
     <tr><td>G</td><td>PAGE — карта ↔ маршрут в линию. В линии энкодер идёт по шагам маршрута, Enter правит ноту шага. Удерживать G + энкодер — темп.</td></tr>
   </table>
 
@@ -2211,8 +2216,8 @@ const SCALES = [
 const CHRM = SCALES.length - 1;
 // лад, в котором рисуем: render() ставит его из проекта
 let KEY = { scale: CHRM, root: 0 };
-const mod = (a, b) => ((a % b) + b) % b;
-const inKey = (K, midi) => SCALES[K.scale][1].includes(mod(midi - K.root, 12));
+const posMod = (a, b) => ((a % b) + b) % b; // остаток без минуса
+const inKey = (K, midi) => SCALES[K.scale][1].includes(posMod(midi - K.root, 12));
 function quant(K, midi) {
   if (K.scale === CHRM) return midi;
   for (let d = 0; d < 12; d++) {
@@ -2225,18 +2230,18 @@ function quant(K, midi) {
 function degOf(K, midi) {
   const iv = SCALES[K.scale][1];
   const rel = midi - K.root;
-  return Math.floor(rel / 12) * iv.length + iv.indexOf(mod(rel, 12));
+  return Math.floor(rel / 12) * iv.length + iv.indexOf(posMod(rel, 12));
 }
 function midiOfDeg(K, d) {
   const iv = SCALES[K.scale][1];
-  return K.root + Math.floor(d / iv.length) * 12 + iv[mod(d, iv.length)];
+  return K.root + Math.floor(d / iv.length) * 12 + iv[posMod(d, iv.length)];
 }
 const tileMidi = t => 12 * (t.o + 1) + t.n;
 // нота тайла в ладу: { n, o } — то, что видно и звучит
 function shown(K, t) {
   if (t.n < 0) return t;
   const q = quant(K, tileMidi(t));
-  return { ...t, n: mod(q, 12), o: Math.floor(q / 12) - 1 };
+  return { ...t, n: posMod(q, 12), o: Math.floor(q / 12) - 1 };
 }
 
 // ───────────────────────── тайл ─────────────────────────
@@ -2427,6 +2432,8 @@ function makeState() {
     keyPending: null, // K ждёт начала такта
     keyPendingBar: 0,
     keyFlash: 0, // звучащая тоника вместо скорости в панели
+    held: new Set(), // клавиши, зажатые на MIDI IN
+    inCh: 0, // вход нот с MIDI IN — общий для устройства, не для проекта
     sync: 'INT',
     draw: null,
     tile: null, // экран тайла: { page, sel, back }
@@ -2542,6 +2549,12 @@ function saveSlot(S, k) {
   S.autosave = false;
   persist(S);
 }
+// вход нот — отдельно от слотов: настройка устройства
+function persistIn(S) {
+  try {
+    localStorage.setItem('maze.in', String(S.inCh));
+  } catch (e) {}
+}
 // в браузере слоты живут в localStorage; в jsc его нет
 function persist(S) {
   try {
@@ -2549,6 +2562,9 @@ function persist(S) {
   } catch (e) {}
 }
 function restore(S) {
+  try {
+    S.inCh = Math.max(0, Math.min(17, +localStorage.getItem('maze.in') || 0));
+  } catch (e) {}
   try {
     const d = JSON.parse(localStorage.getItem('maze.v1'));
     if (!d || !d.slots) return;
@@ -2749,11 +2765,11 @@ function applyFx(S, r, p, fx, notes, step) {
       r.jump = { mode: v(0), n: +v(1) };
       break;
     case 'K': // тоника фразы — с начала следующего такта, в ближайшую сторону; сдвиг M сбрасывается
-      S.keyPending = mod(fx.p[0] - S.root + 6, 12) - 6;
+      S.keyPending = posMod(fx.p[0] - S.root + 6, 12) - 6;
       S.keyPendingBar = S.bar;
       break;
     case 'M': // сдвиг фразы по ладу — сразу, копится по кругу внутри октавы
-      S.degShift = mod(S.degShift + +v(0), SCALES[S.scale][1].length);
+      S.degShift = posMod(S.degShift + +v(0), SCALES[S.scale][1].length);
       break;
   }
 }
@@ -2796,7 +2812,17 @@ function applyPending(S) {
 // ───────────────────────── транспорт ─────────────────────────
 const KEY_FLASH_MS = 600;
 // звучащая тоника: тоника проекта, K и сдвиг M по ладу
-const soundingRoot = S => mod(midiOfDeg(S, S.degShift) + S.keyShift, 12);
+const soundingRoot = S => posMod(midiOfDeg(S, S.degShift) + S.keyShift, 12);
+// MIDI IN: ноты транспонируют фразу — единственное исключение, сами не звучат. Сразу, защёлкой,
+// с октавами от тоники проекта в 4-й октаве (C4 = 60); из зажатых — нижняя; сбрасывает M и ждущий K.
+// Вход — общий для устройства (поле IN в проектах): 0 — выкл, 1 — все каналы, 2…17 — канал 1…16.
+function extNote(S, note, on, now, ch = 0) {
+  if (!S.inCh || (S.inCh > 1 && ch !== S.inCh - 2)) return;
+  if (!on) return S.held.delete(note); // защёлка: отпустили — тональность остаётся
+  S.held.add(note);
+  const shift = Math.min(...S.held) - (60 + S.root);
+  Object.assign(S, { keyShift: Math.max(-64, Math.min(63, shift)), degShift: 0, keyPending: null, keyFlash: now + KEY_FLASH_MS });
+}
 function trigger(S, ri, now) {
   const r = S.routes[ri];
   const p = r.cells[r.i];
@@ -2933,7 +2959,7 @@ const FX_LIST = ['--', ...FX_ORDER];
 function setKey(S, t, d) {
   const sh = shown(S, t);
   const list = [-1, ...Array.from({ length: 12 }, (_, n) => n).filter(n => S.scale === CHRM || inKey(S, n))];
-  const i = mod(list.indexOf(sh.n) + d, list.length);
+  const i = posMod(list.indexOf(sh.n) + d, list.length);
   t.n = list[i];
   if (t.n >= 0 && sh.n >= 0) t.o = sh.o; // из пустой — в записанную октаву
 }
@@ -3076,10 +3102,11 @@ function drawProj(fb, S, now) {
   // TAP+PAGE — следующее), у остальных — записанные, тонким
   const d = cur ? S : slot && JSON.parse(slot.data);
   if (!d) return;
-  const vals = [A.NOTE_NAME[d.root ?? 0], SCALES[d.scale ?? CHRM][0], cur && S.sync === 'EXT' ? 'EXT' : String(d.bpm)];
+  const inText = S.inCh === 0 ? 'OFF' : S.inCh === 1 ? 'ALL' : String(S.inCh - 1).padStart(2, '0');
+  const vals = [A.NOTE_NAME[d.root ?? 0], SCALES[d.scale ?? CHRM][0], inText, cur && S.sync === 'EXT' ? 'EXT' : String(d.bpm)];
   const field = (i, x, y) => {
     if (cur && P.field === i) label(fb, x - 1, y, vals[i]);
-    else text(fb, x, y, vals[i], 1, cur ? 'klaatu' : 'klaatu_light');
+    else text(fb, x, y, vals[i], 1, cur || i === 2 ? 'klaatu' : 'klaatu_light'); // вход нот — общий, не слота
   };
   const busy = row => (P.hold && (P.hold.act === 'LOAD' ? 8 : 16) === row) || (now < P.done && P.doneRow === row) || (row === 8 && S.queued);
   const kx = 128 - textW(vals[1]) - textW(vals[0]) - 3;
@@ -3087,12 +3114,18 @@ function drawProj(fb, S, now) {
     field(0, kx, 8);
     field(1, 128 - textW(vals[1]), 8);
   }
-  field(2, 128 - textW(vals[2]), 24);
+  if (!busy(16)) {
+    // вход нот с MIDI IN: IN и канал
+    const x = 128 - textW(vals[2]);
+    text(fb, x - textW('IN') - 2, 16, 'IN');
+    field(2, x, 16);
+  }
+  field(3, 128 - textW(vals[3]), 24);
 }
-// поле, которое правит энкодер: тоника → лад → темп
-const nextField = S => (S.proj.field = (S.proj.field + 1) % 3);
+// поле, которое правит энкодер: тоника → лад → вход нот IN → темп
+const nextField = S => (S.proj.field = (S.proj.field + 1) % 4);
 function openProj(S) {
-  S.proj = { sel: S.slot, hold: null, back: S.mode === 'line' ? 'line' : 'map', done: 0, doneRow: 8, field: 2 };
+  S.proj = { sel: S.slot, hold: null, back: S.mode === 'line' ? 'line' : 'map', done: 0, doneRow: 8, field: 3 };
   S.mode = 'proj';
 }
 function projAction(S, now) {
@@ -3346,9 +3379,13 @@ function onEnc(S, d) {
         S.proj.hold = null;
       } else if (S.proj.sel === S.slot) {
         // энкодер — выбранное: тоника, лад или темп загруженного проекта (на чужом слоте — ничего)
-        if (S.proj.field === 0) S.root = mod(S.root + d, 12);
-        if (S.proj.field === 1) S.scale = mod(S.scale + d, SCALES.length);
-        if (S.proj.field === 2 && !S.ext.on) S.bpm = Math.max(40, Math.min(255, S.bpm + d));
+        if (S.proj.field === 0) S.root = posMod(S.root + d, 12);
+        if (S.proj.field === 1) S.scale = posMod(S.scale + d, SCALES.length);
+        if (S.proj.field === 2) {
+          S.inCh = Math.max(0, Math.min(17, S.inCh + d));
+          persistIn(S);
+        }
+        if (S.proj.field === 3 && !S.ext.on) S.bpm = Math.max(40, Math.min(255, S.bpm + d));
       }
       break;
     case 'settings': {
@@ -3627,6 +3664,42 @@ function bindControls() {
   });
   $('extbpm').addEventListener('change', e => (S.ext.bpm = Math.max(40, Math.min(255, +e.target.value || 120))));
   ['START', 'STOP', 'CONT'].forEach(m => $('ext-' + m.toLowerCase()).addEventListener('click', () => S.ext.on && extTransport(S, m)));
+  // ноты на MIDI IN: клавиши на экране (канал 1) и настоящая клавиатура через Web MIDI
+  let oct = 4;
+  const keys = $('midi-keys');
+  const keyName = n => A.NOTE_NAME[n % 12] + Math.floor(n / 12 - 1);
+  const drawKeys = () => {
+    keys.innerHTML = '';
+    for (let n = 12 * (oct + 1); n <= 12 * (oct + 2); n++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = keyName(n);
+      b.className = A.NOTE_SHARP[n % 12] ? 'k sharp' : 'k';
+      b.addEventListener('pointerdown', () => extNote(S, n, true, performance.now()));
+      b.addEventListener('pointerup', () => extNote(S, n, false, performance.now()));
+      b.addEventListener('pointerleave', () => S.held.has(n) && extNote(S, n, false, performance.now()));
+      keys.appendChild(b);
+    }
+  };
+  drawKeys();
+  $('oct-dn').addEventListener('click', () => ((oct = Math.max(1, oct - 1)), drawKeys()));
+  $('oct-up').addEventListener('click', () => ((oct = Math.min(8, oct + 1)), drawKeys()));
+  if (navigator.requestMIDIAccess)
+    navigator.requestMIDIAccess().then(
+      acc => {
+        const hook = () =>
+          acc.inputs.forEach(inp => {
+            inp.onmidimessage = e => {
+              const [st, n, v] = e.data;
+              const type = st & 0xf0;
+              if (type === 0x90 || type === 0x80) extNote(S, n, type === 0x90 && v > 0, performance.now(), st & 0x0f);
+            };
+          });
+        hook();
+        acc.onstatechange = hook;
+      },
+      () => {}
+    );
   $('reset').addEventListener('click', () => {
     try {
       localStorage.removeItem('maze.v1');

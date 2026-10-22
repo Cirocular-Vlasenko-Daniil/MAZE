@@ -648,21 +648,30 @@ static void drawProj(FB &fb, Ui &u, uint32_t now) {
     // тоника, лад, темп — справа: у загруженного живые и правятся энкодером (выбранное — в плашке,
     // TAP+PAGE — следующее), у остальных — записанные, тонким
     Key k = cur ? S.key() : blobKey(u.selBlob);
-    char vals[3][8];
+    char vals[4][8];
     snprintf(vals[0], sizeof(vals[0]), "%s", NOTE_NAME[k.root]);
     snprintf(vals[1], sizeof(vals[1]), "%s", SCALES[k.scale].name);
-    if (cur && S.ext) snprintf(vals[2], sizeof(vals[2]), "EXT");
-    else snprintf(vals[2], sizeof(vals[2]), "%d", cur ? S.bpm : blobBpm(u.selBlob));
+    if (u.inCh == IN_OFF) strcpy(vals[2], "OFF");
+    else if (u.inCh == IN_ALL) strcpy(vals[2], "ALL");
+    else snprintf(vals[2], sizeof(vals[2]), "%02d", u.inCh - 1);
+    if (cur && S.ext) snprintf(vals[3], sizeof(vals[3]), "EXT");
+    else snprintf(vals[3], sizeof(vals[3]), "%d", cur ? S.bpm : blobBpm(u.selBlob));
     auto field = [&](int i, int x, int y) {
       if (cur && u.projField == i) label(fb, x - 1, y, vals[i]);
-      else text(fb, x, y, vals[i], 1, !cur);
+      else text(fb, x, y, vals[i], 1, !cur && i != 2);  // вход нот — общий, не слота
     };
     bool busy8 = (u.projHold == 1) || ((int32_t)(u.projDone - now) > 0 && u.projDoneRow == 8) || u.queued >= 0;
     if (!busy8) {
       field(0, 128 - textW(vals[1]) - textW(vals[0]) - 3, 8);
       field(1, 128 - textW(vals[1]), 8);
     }
-    field(2, 128 - textW(vals[2]), 24);
+    bool busy16 = (u.projHold == 2) || ((int32_t)(u.projDone - now) > 0 && u.projDoneRow == 16);
+    if (!busy16) {  // вход нот с MIDI IN: IN и канал
+      int x = 128 - textW(vals[2]);
+      text(fb, x - textW("IN") - 2, 16, "IN");
+      field(2, x, 16);
+    }
+    field(3, 128 - textW(vals[3]), 24);
   }
 }
 
@@ -714,7 +723,7 @@ void Ui::openTile(Mode back) {
 void Ui::openProj() {
   projSel = slot;
   projHold = 0;
-  projField = 2;
+  projField = 3;
   projBack = mode == M_LINE ? M_LINE : M_MAP;
   projDone = 0;
   selCached = -1;
@@ -762,7 +771,12 @@ void Ui::onEnc(int d, uint32_t) {
         // энкодер — выбранное: тоника, лад или темп загруженного проекта (на чужом слоте — ничего)
         if (projField == 0) S->root = wrap(S->root + d, 12);
         if (projField == 1) S->scale = wrap(S->scale + d, SCALE_N);
-        if (projField == 2 && !S->ext) {
+        if (projField == 2) {
+          int v = inCh + d;
+          inCh = v < 0 ? 0 : v > 17 ? 17 : v;
+          if (store) store->setInChannel(inCh);
+        }
+        if (projField == 3 && !S->ext) {
           int b = S->bpm + d;
           S->bpm = b < 40 ? 40 : b > 255 ? 255 : b;
         }
@@ -915,7 +929,7 @@ void Ui::onPageDown(uint32_t) {
   } else if (tap && mode == M_PROJ) {
     tapClean = false;
     pageUsed = true;
-    projField = (projField + 1) % 3;  // в проектах TAP+PAGE — следующее поле: тоника → лад → темп
+    projField = (projField + 1) % 4;  // в проектах TAP+PAGE — следующее поле: тоника → лад → IN → темп
   }
 }
 void Ui::onPageUp(uint32_t) {
@@ -1029,6 +1043,7 @@ void Ui::boot(uint32_t now) {
     bool has = used[k] && store->read(k, tmp, af);
     loadNow(k, tmp, has, has ? af : true);
   }
+  inCh = store ? store->inChannel() : IN_OFF;
   lastChange = lastCheck = now;
 }
 

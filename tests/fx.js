@@ -358,3 +358,37 @@ ok(st.keyPending === -5 && st.keyShift === 0, 'K B — ждёт такта, в �
 applyProject(st, serialize(st));
 ok(st.routes[0].key === false && st.routes[1].key === true && st.keyShift === 0, 'KEY OFF сохраняется, транспонирование при загрузке сброшено');
 print(fails ? `${fails} FAIL` : 'транспонирование: все проверки прошли');
+
+// ── MIDI IN: ноты транспонируют фразу
+fails = 0;
+st = makeState();
+st.root = 2; // опора — D4 = 62
+extNote(st, 64, true, 0);
+ok(st.keyShift === 0, 'MIDI IN: вход OFF — мимо');
+Object.assign(st, { inCh: 1, degShift: 3, keyPending: 2 });
+extNote(st, 64, true, 1000);
+ok(st.keyShift === 2 && st.degShift === 0 && st.keyPending === null && st.keyFlash === 1000 + KEY_FLASH_MS, 'MIDI IN: E4 — +2, сброшены M и ждущий K');
+extNote(st, 59, true, 1000);
+ok(st.keyShift === -3, 'MIDI IN: нижняя из зажатых');
+extNote(st, 59, false, 1000);
+extNote(st, 64, false, 1000);
+ok(st.keyShift === -3, 'MIDI IN: защёлка');
+extNote(st, 74, true, 1000);
+ok(st.keyShift === 12, 'MIDI IN: с октавами');
+st.inCh = 2;
+extNote(st, 50, true, 1000, 3);
+ok(st.keyShift === 12, 'MIDI IN: чужой канал — мимо');
+print(fails ? `${fails} FAIL` : 'MIDI IN: все проверки прошли');
+
+// ── экран проектов: энкодер правит тонику, лад и вход нот (ловит перекрытие имён в onEnc)
+fails = 0;
+st = makeState();
+openProj(st);
+st.proj.field = 0;
+onEnc(st, 2);
+st.proj.field = 1;
+onEnc(st, -1);
+st.proj.field = 2;
+onEnc(st, 3);
+ok(st.root === 2 && st.scale === CHRM - 1 && st.inCh === 3, 'проекты: энкодер — тоника, лад, IN');
+print(fails ? `${fails} FAIL` : 'поля проектов: все проверки прошли');
