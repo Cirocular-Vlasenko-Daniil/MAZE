@@ -225,6 +225,56 @@ int main() {
     ok(deserialize(back, b2, BLOB) && back.scale == 10 && back.root == 9, "лад: сохраняется в проекте");
   }
 
+  // ── транспонирование: K с начала такта, M сразу, KEY OFF — мимо
+  {
+    struct Rec : Output {
+      int last[ROUTES] = {-1, -1, -1, -1};
+      void note(const Note &n) override { last[n.route] = n.note; }
+    } rec;
+    State T;
+    blank(T);
+    T.scale = 1, T.root = 4;  // E MIN
+    route(T, 0, {{0, 0}, {1, 0}});
+    route(T, 1, {{0, 1}});
+    T.routes[1].keyOn = false;
+    T.at({0, 0}).n = 4, T.at({0, 0}).o = 4;  // E4 = 64
+    T.at({1, 0}).n = 4, T.at({1, 0}).o = 4;
+    T.at({0, 1}).n = 4, T.at({0, 1}).o = 4;
+    setFx(T.at({1, 0}).fx, 'M');
+    T.at({1, 0}).fx.p[0] = 10;  // +3 ступени
+    T.playing = true;
+    ticks(T, 1, &rec);
+    ticks(T, 6, &rec);  // второй шаг — тайл с M
+    ok(rec.last[0] == 69 && T.degShift == 3, "M +3: сразу, на том же шаге (E → A в E MIN)");
+    ok(rec.last[1] == 64, "KEY OFF: маршрут не транспонируется");
+    setFx(T.at({0, 0}).fx, 'K');
+    T.at({0, 0}).fx.p[0] = 11;  // B
+    T.at({1, 0}).fx.code = 0;
+    ticks(T, 6, &rec);  // снова первый тайл — K
+    ok(T.keyPending == -5 && T.keyShift == 0 && T.degShift == 3, "K B: ждёт такта, в ближайшую сторону (−5)");
+    while (T.ticks % BAR_TICKS) ticks(T, 1, &rec);
+    ticks(T, 1, &rec);
+    ok(T.keyShift == -5 && T.degShift == 0 && T.soundingRoot() == 11, "K: с начала такта, сдвиг M сброшен, звучит B");
+    restartGrid(T);
+    ok(T.keyShift == 0 && T.degShift == 0, "старт — транспонирование сброшено");
+    uint8_t kb[BLOB];
+    serialize(T, kb);
+    State T2;
+    ok(deserialize(T2, kb, BLOB) && !T2.routes[1].keyOn && T2.routes[0].keyOn && T2.routes[0].closed == T.routes[0].closed, "KEY OFF сохраняется в проекте");
+    // демо 05 POINTER: кольцо на 1/8 ведёт E → A → B → E по 4 такта
+    State D;
+    loadDemo(D, 4);
+    D.tickUs = internalTickUs(D.bpm);
+    D.playing = true;
+    char seq[8] = {};
+    for (int bar = 0; bar < 20; bar++) {
+      ticks(D, 1);
+      if (bar % 4 == 0) seq[bar / 4] = NOTE_NAME[D.soundingRoot()][0];
+      ticks(D, BAR_TICKS - 1);
+    }
+    ok(!strcmp(seq, "EABEE"), "демо 05: прогрессия E → A → B → E по 4 такта");
+  }
+
   // ── условие по счёту
   blank(S);
   route(S, 0, {{0, 0}});

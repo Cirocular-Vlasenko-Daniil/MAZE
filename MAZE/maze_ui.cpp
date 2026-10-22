@@ -501,7 +501,10 @@ static void drawPanel(FB &fb, const Ui &u, uint32_t now) {
     text(fb, 100, 16, "RT");
     return;
   }
-  text(fb, 100, 8, SPEED_NAME[r.speed]);
+  // после смены тональности (K, M) вместо скорости — звучащая тоника
+  if ((int32_t)(S.keyFlashUntil - now) > 0) {
+    label(fb, 100, 8, NOTE_NAME[S.soundingRoot()]);
+  } else text(fb, 100, 8, SPEED_NAME[r.speed]);
   text(fb, 100, 16, endName(r.closed, r.end));
   snprintf(buf, sizeof(buf), "CH%02d", r.ch);
   text(fb, 100, 24, buf);
@@ -549,24 +552,27 @@ static void drawLine(FB &fb, const Ui &u, uint32_t now) {
 }
 
 // Настройки маршрута: скорость, конец, канал, velocity и длина ноты по умолчанию
-static const char *const SET_NAME[5] = {"SPD", "END", "CH", "VEL", "LEN"};
-static const uint8_t SET_X[5] = {0, 24, 56, 80, 104};
+// KEY — транспонировать ли маршрут вместе с фразой (K, M)
+static const char *const SET_NAME[6] = {"SPD", "END", "CH", "VEL", "LEN", "KEY"};
+static const uint8_t SET_X[6] = {0, 64, 0, 64, 0, 64}, SET_Y[6] = {8, 8, 16, 16, 24, 24};
 static void drawSettings(FB &fb, const Ui &u) {
   const Route &r = u.S->routes[u.focus];
   char buf[16];
   snprintf(buf, sizeof(buf), "RT%d", u.focus + 1);
   int x = label(fb, 0, 0, buf);
   text(fb, x + 2, 0, r.closed ? "SET LOOP" : "SET");
-  char vals[5][8];
+  char vals[6][8];
   strcpy(vals[0], SPEED_NAME[r.speed]);
   strcpy(vals[1], endName(r.closed, r.end));
   snprintf(vals[2], sizeof(vals[2]), "%02d", r.ch);
   snprintf(vals[3], sizeof(vals[3]), "%d", r.vel);
   snprintf(vals[4], sizeof(vals[4]), "%d", r.gate);
-  for (int i = 0; i < 5; i++) {
-    if (i == u.setSel) label(fb, SET_X[i], 12, SET_NAME[i]);
-    else text(fb, SET_X[i] + 1, 12, SET_NAME[i]);
-    text(fb, SET_X[i] + 1, 22, vals[i]);
+  strcpy(vals[5], r.keyOn ? "ON" : "OFF");
+  for (int i = 0; i < 6; i++) {
+    // две колонки: имя (выбранное — в плашке) и значение рядом
+    if (i == u.setSel) label(fb, SET_X[i], SET_Y[i], SET_NAME[i]);
+    else text(fb, SET_X[i] + 1, SET_Y[i], SET_NAME[i]);
+    text(fb, SET_X[i] + 25, SET_Y[i], vals[i]);
   }
 }
 
@@ -777,10 +783,10 @@ void Ui::onEnc(int d, uint32_t) {
       } else if (setSel == 3) {
         int v = r.vel + 8 * d;
         r.vel = v < 1 ? 1 : v > 127 ? 127 : v;
-      } else {
+      } else if (setSel == 4) {
         int v = r.gate + 5 * d;
         r.gate = v < 5 ? 5 : v > 100 ? 100 : v;
-      }
+      } else r.keyOn = !r.keyOn;
       break;
     }
   }
@@ -827,7 +833,7 @@ void Ui::onSwDown(uint32_t now) {
       break;
     }
     case M_SETTINGS:
-      setSel = (setSel + 1) % 5;
+      setSel = (setSel + 1) % 6;
       break;
     case M_PROJ:
       projHold = mod ? 2 : 1;

@@ -13,7 +13,9 @@ COLS, ROWS, MAX_LEN, ROUTES = 8, 4, 16, 4
 SPEEDS = ["2/1", "1/1", "1/2", "1/4", "1/8"]
 ENDS_OPEN, ENDS_CLOSED = ["LOOP", "PONG", "REV"], ["FWD", "REV"]
 CONDS = ["PASS", "MEET", "NEAR", "CHNG"]
-FX = "ARXPILOZVDWTSH"
+FX = "ARXPILOZVDWTSHKM"
+SCALES = ["MAJ", "MIN", "DOR", "PHR", "LYD", "MIX", "LOC", "HMIN", "MMIN", "PMAJ", "PMIN", "CHRM"]
+NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 TRIGS = ["--"] + [f"{a}:{b}" for b in range(2, 9) for a in range(1, b + 1)] + ["PRE", "/PRE"]
 NOTE = re.compile(r"^[A-G]#?[2-8]$")
 
@@ -30,6 +32,7 @@ def check(d):
         assert trig is None or trig in TRIGS, f"{name}: {f}"
         assert p is None or len(p) <= 3, f"{name}: {f}"
     assert len({(f[0], f[1]) for f in d["fx"]}) == len(d["fx"]), f"{name}: два эффекта в клетке"
+    assert d.get("scale", "CHRM") in SCALES and d.get("root", "C") in NOTES, f"{name}: лад"
     assert len(d["routes"]) == ROUTES, name
     for k, rt in enumerate(d["routes"]):
         cells = rt["cells"]
@@ -66,10 +69,11 @@ def cpp(spec):
         "  uint8_t len;",
         "  bool closed;",
         "  uint8_t speed, end;",
+        "  bool key;  // транспонировать командами K и M",
         "};",
         "struct Demo {",
         "  const char *name;",
-        "  uint8_t bpm;",
+        "  uint8_t bpm, scale, root;",
         "  const char *grid[ROWS][COLS];",
         "  const DemoFx *fx;",
         "  uint8_t fxN;",
@@ -93,8 +97,9 @@ def cpp(spec):
         for rt in d["routes"]:
             cells = ", ".join(f"{{{c}, {r}}}" for c, r in rt["cells"]) or "{0, 0}"
             routes.append(f"{{{{{cells}}}, {len(rt['cells'])}, {str(rt['closed']).lower()}, "
-                          f"{SPEEDS.index(rt['speed'])}, {end_index(rt)}}}")
-        out.append(f'    {{"{d["name"]}", {d["bpm"]}, {{{grid}}}, DEMO_FX_{i}, {len(d["fx"])},')
+                          f"{SPEEDS.index(rt['speed'])}, {end_index(rt)}, {str(rt.get('key', True)).lower()}}}")
+        sc, root = SCALES.index(d.get("scale", "CHRM")), NOTES.index(d.get("root", "C"))
+        out.append(f'    {{"{d["name"]}", {d["bpm"]}, {sc}, {root}, {{{grid}}}, DEMO_FX_{i}, {len(d["fx"])},')
         out.append("     {" + ",\n      ".join(routes) + "}},")
     out += ["};", "", "}  // namespace maze", ""]
     return "\n".join(out)
@@ -106,10 +111,12 @@ def js(spec):
         demos.append({
             "name": d["name"],
             "bpm": d["bpm"],
+            "scale": SCALES.index(d.get("scale", "CHRM")),
+            "root": NOTES.index(d.get("root", "C")),
             "grid": d["grid"],
             "fx": d["fx"],
             "routes": [{"cells": rt["cells"], "closed": rt["closed"], "speed": SPEEDS.index(rt["speed"]),
-                        "end": end_index(rt)} for rt in d["routes"]],
+                        "end": end_index(rt), "key": rt.get("key", True)} for rt in d["routes"]],
         })
     body = json.dumps({"version": spec["version"], "list": demos}, ensure_ascii=False)
     return ("// Сгенерировано tools/gen_demos.py из assets/demos.json — не править руками.\n"

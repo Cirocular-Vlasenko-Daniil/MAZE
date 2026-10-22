@@ -175,3 +175,21 @@ dump('clear_chain_hold', m);
 m = playing(base());
 m.sync = 'EXT';
 dump('map_ext', m);
+
+// транспонирование: KEY в настройках маршрута, вспышка тоники вместо скорости, правка K и M
+const ks = base();
+Object.assign(ks, { mode: 'settings', focus: 1, setSel: 5 });
+ks.routes[1].key = false;
+dump('settings_key', ks);
+const kf = playing(base());
+Object.assign(kf, { keyShift: 5, degShift: 0, keyFlash: NOW + 100 });
+dump('map_key_flash', kf);
+const kt = base();
+kt.grid[1][6].fx = Object.assign(newFx('K'), { p: [9] });
+Object.assign(kt, { cur: { c: 6, r: 1 }, tile: { page: 1, sel: 1, back: 'map', layout: 'map' }, mode: 'tile' });
+dump('tile_map_fx_key', kt);
+const km = base();
+km.grid[1][6].fx = Object.assign(newFx('M'), { p: [10] });
+Object.assign(km, { cur: { c: 6, r: 1 }, tile: { page: 1, sel: 1, back: 'line', layout: 'hood' }, mode: 'tile' });
+dump('tile_hood_fx_move', km);
+

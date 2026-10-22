@@ -330,3 +330,31 @@ ok(st.scale === 10 && st.root === 9, 'лад: сохраняется в прое
 applyProject(st, JSON.stringify(Object.assign(JSON.parse(serialize(st)), { scale: undefined, root: undefined })));
 ok(st.scale === CHRM && st.root === 0, 'лад: проект без лада — CHRM');
 print(fails ? `${fails} FAIL` : 'лад: все проверки прошли');
+
+// ── транспонирование: K с начала такта, M сразу; демо 05 — прогрессия по 4 такта
+fails = 0;
+st = makeState();
+applyProject(st, demoProject(4));
+st.playing = true;
+restartGrid(st, 0);
+const bar = barMs(st);
+let seqK = '';
+for (let now = 0, b = 0; b < 20; now += 5) {
+  tick(st, now);
+  if (now >= b * bar + 5) {
+    if (b % 4 === 0) seqK += A.NOTE_NAME[soundingRoot(st)][0];
+    b++;
+  }
+}
+ok(seqK === 'EABEE', 'демо 05: прогрессия E → A → B → E по 4 такта (' + seqK + ')');
+st = makeState();
+Object.assign(st, { scale: 1, root: 4 });
+st.routes[0].key = false;
+ns = [{ midi: 64, vel: 100, at: 0, dur: 0.1 }];
+applyFx(st, st.routes[0], { c: 0, r: 0 }, Object.assign(newFx('M'), { p: [10] }), ns, 0.1);
+ok(st.degShift === 3, 'M +3 — сразу');
+applyFx(st, st.routes[0], { c: 0, r: 0 }, Object.assign(newFx('K'), { p: [11] }), ns, 0.1);
+ok(st.keyPending === -5 && st.keyShift === 0, 'K B — ждёт такта, в ближайшую сторону');
+applyProject(st, serialize(st));
+ok(st.routes[0].key === false && st.routes[1].key === true && st.keyShift === 0, 'KEY OFF сохраняется, транспонирование при загрузке сброшено');
+print(fails ? `${fails} FAIL` : 'транспонирование: все проверки прошли');

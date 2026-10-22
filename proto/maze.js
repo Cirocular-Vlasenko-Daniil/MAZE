@@ -245,8 +245,10 @@ const FXDEF = {
   T: [['STP', nums(1, 8), 'STEPS TO HOLD']],
   S: [['DIR', ['FAST', 'SLOW'], 'FASTER/SLOWER']],
   H: [['MOD', ['FWD', 'BACK', 'HOME'], 'WHERE TO JUMP'], ['N', nums(1, 8), 'STEPS']],
+  K: [['KEY', A.NOTE_NAME, 'NEW TONIC']],
+  M: [['STP', nums(-7, 7, sign), 'SCALE STEPS']],
 };
-const FX_DEFAULT = { A: [2, 1, 0], R: [1, 0], X: [3], P: [8, 0], I: [31], O: [0, 1], Z: [1, 0], V: [1, 0], W: [1], T: [1], S: [0], H: [0, 1] };
+const FX_DEFAULT = { A: [2, 1, 0], R: [1, 0], X: [3], P: [8, 0], I: [31], O: [0, 1], Z: [1, 0], V: [1, 0], W: [1], T: [1], S: [0], H: [0, 1], K: [0], M: [8] };
 const FX_ORDER = Object.keys(FXDEF);
 const CONDS = Object.keys(A.COND);
 const fxVal = (fx, k) => FXDEF[fx.code][k][1][fx.p[k]];
@@ -286,7 +288,7 @@ const endsOf = r => (r.closed ? ENDS_CLOSED : ENDS_OPEN);
 const startIndex = r => (!r.closed && ENDS_OPEN[r.end] === 'REV' ? r.cells.length - 1 : 0);
 
 function makeRoute(i) {
-  return { cells: [], closed: false, speed: 1, end: 0, ch: i + 1, vel: 100, gate: 50, i: 0, dir: 1, next: 0, fresh: true, flash: 0, fx: null, fxFlash: 0, wait: 0, jump: null, prevFx: null, muted: false };
+  return { cells: [], closed: false, speed: 1, end: 0, ch: i + 1, vel: 100, gate: 50, key: true, i: 0, dir: 1, next: 0, fresh: true, flash: 0, fx: null, fxFlash: 0, wait: 0, jump: null, prevFx: null, muted: false };
 }
 
 function makeState() {
@@ -304,6 +306,12 @@ function makeState() {
     bpm: 120,
     scale: CHRM, // лад проекта
     root: 0, // тоника: 0 — C
+    // транспонирование фразы — игра, не проект: K (с такта) и M (сразу); сбрасывается при старте и загрузке
+    keyShift: 0, // полутоны от тоники проекта, −6…+5
+    degShift: 0, // ступени лада, по кругу внутри октавы
+    keyPending: null, // K ждёт начала такта
+    keyPendingBar: 0,
+    keyFlash: 0, // звучащая тоника вместо скорости в панели
     sync: 'INT',
     draw: null,
     tile: null, // экран тайла: { page, sel, back }
@@ -340,7 +348,7 @@ function demoProject(k) {
     if (p) p.forEach((v, j) => (fx.p[j] = v));
     if (trig) fx.trig = trig;
   });
-  const routes = d.routes.map((x, i) => Object.assign(makeRoute(i), { cells: cells(x.cells), closed: x.closed, speed: x.speed, end: x.end }));
+  const routes = d.routes.map((x, i) => Object.assign(makeRoute(i), { cells: cells(x.cells), closed: x.closed, speed: x.speed, end: x.end, key: x.key ?? true }));
   return serialize({ src, routes, bpm: d.bpm, sync: 'INT', scale: d.scale ?? CHRM, root: d.root ?? 0 });
 }
 
@@ -355,7 +363,7 @@ function serialize(S) {
   return JSON.stringify({
     v: 1,
     grid: S.src.map(row => row.map(t => ({ n: t.n, o: t.o, vel: t.vel, gate: t.gate, fx: fx(t.fx) }))),
-    routes: S.routes.map(r => ({ cells: r.cells.map(p => [p.c, p.r]), closed: r.closed, speed: r.speed, end: r.end, ch: r.ch, vel: r.vel, gate: r.gate })),
+    routes: S.routes.map(r => ({ cells: r.cells.map(p => [p.c, p.r]), closed: r.closed, speed: r.speed, end: r.end, ch: r.ch, vel: r.vel, gate: r.gate, key: r.key })),
     bpm: S.bpm,
     sync: S.sync,
     scale: S.scale,
@@ -371,7 +379,7 @@ function applyProject(S, data, now = 0) {
   S.routes = [0, 1, 2, 3].map(makeRoute);
   if (d) {
     d.routes.forEach((x, i) => {
-      const r = Object.assign(S.routes[i], { cells: cells(x.cells), closed: x.closed, speed: x.speed, end: x.end, ch: x.ch, vel: x.vel, gate: x.gate });
+      const r = Object.assign(S.routes[i], { cells: cells(x.cells), closed: x.closed, speed: x.speed, end: x.end, ch: x.ch, vel: x.vel, gate: x.gate, key: x.key ?? true });
       r.i = startIndex(r);
     });
     S.bpm = d.bpm;
@@ -625,6 +633,13 @@ function applyFx(S, r, p, fx, notes, step) {
     case 'H':
       r.jump = { mode: v(0), n: +v(1) };
       break;
+    case 'K': // тоника фразы — с начала следующего такта, в ближайшую сторону; сдвиг M сбрасывается
+      S.keyPending = mod(fx.p[0] - S.root + 6, 12) - 6;
+      S.keyPendingBar = S.bar;
+      break;
+    case 'M': // сдвиг фразы по ладу — сразу, копится по кругу внутри октавы
+      S.degShift = mod(S.degShift + +v(0), SCALES[S.scale][1].length);
+      break;
   }
 }
 
@@ -664,6 +679,9 @@ function applyPending(S) {
 }
 
 // ───────────────────────── транспорт ─────────────────────────
+const KEY_FLASH_MS = 600;
+// звучащая тоника: тоника проекта, K и сдвиг M по ладу
+const soundingRoot = S => mod(midiOfDeg(S, S.degShift) + S.keyShift, 12);
 function trigger(S, ri, now) {
   const r = S.routes[ri];
   const p = r.cells[r.i];
@@ -680,10 +698,14 @@ function trigger(S, ri, now) {
     r.prevFx = fired; // для PRE следующего тайла с эффектом
     if (fired) {
       applyFx(S, r, p, fx, notes, step);
+      if (fx.code === 'M') S.keyFlash = now + KEY_FLASH_MS;
       r.fx = fx.code; // в колонке маршрута — последний сработавший
       r.fxFlash = now + 160;
     }
   }
+  // транспонирование фразы — у маршрутов с KEY ON
+  if (r.key && (S.keyShift || S.degShift))
+    notes.forEach(nt => (nt.midi = Math.max(0, Math.min(127, midiOfDeg(S, degOf(S, nt.midi) + S.degShift) + S.keyShift))));
   // заглушённый маршрут молчит, но указатель идёт и эффекты срабатывают
   if (r.muted) return;
   if (notes.length) r.flash = now + Math.min(0.5 * step, 0.12) * 1000;
@@ -722,6 +744,9 @@ function tick(S, now) {
   }
   if (!S.playing) return;
   S.bar = Math.floor((now - S.t0) / barMs(S));
+  if (S.keyPending !== null && S.bar > S.keyPendingBar) {
+    Object.assign(S, { keyShift: S.keyPending, degShift: 0, keyPending: null, keyFlash: now + KEY_FLASH_MS });
+  }
   if (S.pending.length && S.routes.some(r => r.cells.length && now >= r.next)) applyPending(S);
   S.routes.forEach((r, ri) => {
     if (!r.cells.length) return;
@@ -748,6 +773,7 @@ function restartGrid(S, now) {
     r.prevFx = null;
   });
   S.src.forEach(row => row.forEach(t => t.fx && (t.fx.count = 0)));
+  Object.assign(S, { keyShift: 0, degShift: 0, keyPending: null, keyFlash: 0 });
   S.t0 = now;
   S.bar = 0;
 }
@@ -1027,7 +1053,9 @@ function drawPanel(fb, S, now) {
     text(fb, 100, 16, 'RT');
     return;
   }
-  text(fb, 100, 8, SPEEDS[r.speed].t);
+  // после смены тональности (K, M) вместо скорости — звучащая тоника
+  if (now < S.keyFlash) label(fb, 100, 8, A.NOTE_NAME[soundingRoot(S)]);
+  else text(fb, 100, 8, SPEEDS[r.speed].t);
   text(fb, 100, 16, endsOf(r)[r.end]);
   text(fb, 100, 24, 'CH' + String(r.ch).padStart(2, '0'));
 }
@@ -1060,21 +1088,23 @@ function drawLine(fb, S, now) {
 
 // Настройки маршрута: скорость, конец, канал, velocity и длина ноты по умолчанию
 const SETTINGS = [
-  { name: 'SPD', x: 0 },
-  { name: 'END', x: 24 },
-  { name: 'CH', x: 56 },
-  { name: 'VEL', x: 80 },
-  { name: 'LEN', x: 104 },
+  { name: 'SPD', x: 0, y: 8 },
+  { name: 'END', x: 64, y: 8 },
+  { name: 'CH', x: 0, y: 16 },
+  { name: 'VEL', x: 64, y: 16 },
+  { name: 'LEN', x: 0, y: 24 },
+  { name: 'KEY', x: 64, y: 24 }, // транспонировать ли маршрут вместе с фразой (K, M)
 ];
 function drawSettings(fb, S) {
   const r = S.routes[S.focus];
   const x = label(fb, 0, 0, 'RT' + (S.focus + 1));
   text(fb, x + 2, 0, r.closed ? 'SET LOOP' : 'SET');
-  const vals = [SPEEDS[r.speed].t, endsOf(r)[r.end], String(r.ch).padStart(2, '0'), String(r.vel), String(r.gate)];
+  const vals = [SPEEDS[r.speed].t, endsOf(r)[r.end], String(r.ch).padStart(2, '0'), String(r.vel), String(r.gate), r.key ? 'ON' : 'OFF'];
   SETTINGS.forEach((st, i) => {
-    if (i === S.setSel) label(fb, st.x, 12, st.name);
-    else text(fb, st.x + 1, 12, st.name);
-    text(fb, st.x + 1, 22, vals[i]);
+    // две колонки: имя (выбранное — в плашке) и значение рядом
+    if (i === S.setSel) label(fb, st.x, st.y, st.name);
+    else text(fb, st.x + 1, st.y, st.name);
+    text(fb, st.x + 25, st.y, vals[i]);
   });
 }
 
@@ -1218,6 +1248,7 @@ function onEnc(S, d) {
       if (S.setSel === 2) r.ch = Math.max(1, Math.min(16, r.ch + d));
       if (S.setSel === 3) r.vel = Math.max(1, Math.min(127, r.vel + 8 * d));
       if (S.setSel === 4) r.gate = Math.max(5, Math.min(100, r.gate + 5 * d));
+      if (S.setSel === 5) r.key = !r.key;
       break;
     }
   }

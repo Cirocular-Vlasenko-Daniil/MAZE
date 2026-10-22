@@ -20,16 +20,18 @@ Inspired by KALEIDOSCOPE (Vadjuse) and ORCA; the Klaatu pixel font comes from th
 - **Scale engine:** root and scale per project — MAJ MIN DOR PHR LYD MIX LOC HMIN MMIN PMAJ PMIN or CHRM (off).
   Notes snap to the nearest note of the scale on the map and in sound; the written note is kept, so switching scales back and forth never drifts.
   New notes can only be picked from the scale. **I** counts scale degrees, **A** builds chords from the scale.
-- **14 effects.**
+- **16 effects.**
   - MIDI: **A** arpeggio, **R** ratchet, **X** accent, **P** aftertouch, **I** interval, **L** legato.
   - Map (the tiles move): **O** rotate the 8 neighbours, **Z** shift the row, **V** shift the column.
   - Pointer: **D** turn around, **W** wait silent, **T** wait holding, **S** speed step, **H** jump.
+  - Key (the whole phrase): **K** new tonic from the next bar, **M** move by N scale steps right away.
+    Routes with KEY OFF in their settings are left alone (drums); the sounding tonic flashes in the panel.
 - **Conditions:** IF — PASS (pointer arrives), MEET (two pointers on the tile), NEAR (a pointer next door), CHNG (a neighbour was moved);
   TRG — Elektron-style A:B (1:2…8:8), PRE, /PRE.
 - **32 project slots** on flash. The source map is saved, not the result of the effects, so LOAD brings the map back.
   A draft autosaves; LOAD while playing waits for the next bar.
 - **5 demo projects** in slots 01–05, shipped with the firmware: MIX, MIDI (note effects), MAP (the map rewrites itself),
-  COND (conditions and counters), POINTER (pointer effects). They go only into empty slots, your projects stay.
+  COND (conditions and counters), POINTER (pointer effects and a key progression E → A → B → E, 4 bars each). They go only into empty slots, your projects stay.
 - **Sync:** internal clock with MIDI clock out, or follows MIDI clock on MIDI IN automatically (EXT); start is quantised to the next step.
 
 ![Tile editor](screens/tile_map_fx.png)
@@ -49,7 +51,7 @@ TAP is a modifier. "Hold" means hold until the bar on screen fills.
 | TAP + TAP | play / pause | |
 | PLAY | next route (1→4) | |
 | Hold PLAY | mute the route | |
-| TAP + PLAY | route settings: speed, end, channel, velocity, length | |
+| TAP + PLAY | route settings: speed, end, channel, velocity, length, KEY (follow K and M) | |
 | PAGE | map ↔ route as a line (tile edit from here shows the 3×3 neighbours and a hint line) | next page NOTE → FX → COND |
 | PAGE + encoder | tempo | |
 | TAP + PAGE | projects | |

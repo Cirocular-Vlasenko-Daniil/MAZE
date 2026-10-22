@@ -72,6 +72,8 @@ const FxDef FXDEFS[FX_N] = {
     {'T', 1, {NUM("STP", 8, 1, 1, false, "STEPS TO HOLD")}, {1}, "WAIT HOLDING"},
     {'S', 1, {LIST("DIR", L_SPD, "FASTER/SLOWER")}, {0}, "SPEED STEP"},
     {'H', 2, {LIST("MOD", L_MOD, "WHERE TO JUMP"), NUM("N", 8, 1, 1, false, "STEPS")}, {0, 1}, "JUMP"},
+    {'K', 1, {LIST("KEY", NOTE_NAME, "NEW TONIC")}, {0}, "KEY CHANGE"},
+    {'M', 1, {NUM("STP", 15, -7, 1, true, "SCALE STEPS")}, {8}, "MOVE IN SCALE"},
 };
 #undef LIST
 #undef NUM
@@ -322,8 +324,15 @@ void applyFx(State &S, Route &r, Cell p, const Fx &fx, Note *notes, int &n, uint
       r.jumpMode = fx.p[0];
       r.jumpN = val(1);
       break;
+    case 'K':  // тоника фразы — с начала следующего такта, в ближайшую сторону; сдвиг M сбрасывается
+      S.keyPending = modp(fx.p[0] - S.root + 6, 12) - 6;
+      break;
+    case 'M':  // сдвиг фразы по ладу — сразу, копится по кругу внутри октавы
+      S.degShift = modp(S.degShift + val(0), SCALES[S.scale].count);
+      break;
   }
 }
+int State::soundingRoot() const { return modp(midiOfDeg(key(), degShift) + keyShift, 12); }
 
 // Поворот 8 соседей (тор: за краем — противоположный край) и сдвиги рядов/столбцов.
 // Тайл переезжает целиком. Тайлы с CHNG рядом с изменёнными клетками взводятся.
@@ -384,10 +393,16 @@ void trigger(State &S, int ri, uint32_t nowMs, Output *out) {
     r.prevFx = fired;  // для PRE следующего тайла с эффектом
     if (fired) {
       applyFx(S, r, p, fx, notes, n, stepUs);
+      if (fx.code == 'M') S.keyFlashUntil = nowMs + KEY_FLASH_MS;
       r.lastFx = fx.code;  // в колонке маршрута — последний сработавший
       r.fxFlashUntil = nowMs + 160;
     }
   }
+  if (r.keyOn && (S.keyShift || S.degShift))  // транспонирование фразы — у маршрутов с KEY ON
+    for (int k = 0; k < n; k++) {
+      int m = midiOfDeg(S.key(), degOf(S.key(), notes[k].note) + S.degShift) + S.keyShift;
+      notes[k].note = m < 0 ? 0 : m > 127 ? 127 : m;
+    }
   if (r.muted) return;  // заглушённый молчит, но указатель идёт и эффекты срабатывают
   if (n) r.flashUntil = nowMs + (stepUs / 2000 < 120 ? stepUs / 2000 : 120);
   if (out)
@@ -424,11 +439,16 @@ void restartGrid(State &S) {
     r.prevFx = -1;
   }
   for (Tile &t : S.pool) t.fx.count = 0;
+  S.keyShift = 0, S.degShift = 0, S.keyPending = KEY_NONE, S.keyFlashUntil = 0;
   S.ticks = 0;
 }
 
 void onTick(State &S, uint32_t nowMs, Output *out) {
   if (!S.playing || S.resumeArmed) return;
+  if (S.keyPending != KEY_NONE && S.ticks % BAR_TICKS == 0) {  // K — с начала такта
+    S.keyShift = S.keyPending, S.degShift = 0, S.keyPending = KEY_NONE;
+    S.keyFlashUntil = nowMs + KEY_FLASH_MS;
+  }
   bool due[ROUTES], any = false;
   for (int ri = 0; ri < ROUTES; ri++) {
     Route &r = S.routes[ri];
@@ -531,7 +551,7 @@ int serialize(const State &S, uint8_t *o) {
     const Route &r = S.routes[k];
     uint8_t *b = o + ROUTES_AT + k * (7 + MAX_LEN);
     b[0] = r.len;
-    b[1] = r.closed;
+    b[1] = r.closed | (r.keyOn ? 0 : 2);  // бит 1 — KEY OFF
     b[2] = r.speed;
     b[3] = r.end;
     b[4] = r.ch;
@@ -577,7 +597,8 @@ bool deserialize(State &S, const uint8_t *in, int len) {
     r = Route();
     const uint8_t *b = in + ROUTES_AT + k * (7 + MAX_LEN);
     r.len = b[0] > MAX_LEN ? MAX_LEN : b[0];
-    r.closed = b[1];
+    r.closed = b[1] & 1;
+    r.keyOn = !(b[1] & 2);
     r.speed = b[2] > 4 ? 1 : b[2];
     r.end = b[3];
     r.ch = b[4];
@@ -611,8 +632,8 @@ void loadDemo(State &S, int k) {
   const Demo &d = DEMOS[k];
   newProject(S);
   S.bpm = d.bpm;
-  S.scale = SCALE_CHRM;
-  S.root = 0;
+  S.scale = d.scale;
+  S.root = d.root;
   for (int r = 0; r < ROWS; r++)
     for (int c = 0; c < COLS; c++) {
       const char *s = d.grid[r][c];
@@ -639,6 +660,7 @@ void loadDemo(State &S, int k) {
     r.closed = x.closed;
     r.speed = x.speed;
     r.end = x.end;
+    r.keyOn = x.key;
     for (int i = 0; i < x.len; i++) r.cells[i] = {x.cells[i][0], x.cells[i][1]};
     r.i = startIndex(r);
   }

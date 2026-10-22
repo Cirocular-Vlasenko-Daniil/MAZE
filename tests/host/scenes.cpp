@@ -191,6 +191,34 @@ int main() {
     snprintf(name, sizeof(name), "demo_%02d", k + 1);
     s.dump(name);
   }
+  {  // транспонирование: KEY в настройках, вспышка тоники, правка K и M
+    Scene s;
+    s.u.focus = 1, s.u.mode = M_SETTINGS, s.u.setSel = 5;
+    s.S.routes[1].keyOn = false;
+    s.dump("settings_key");
+  }
+  {
+    Scene s;
+    s.playing();
+    s.S.keyShift = 5, s.S.degShift = 0, s.S.keyFlashUntil = 100;
+    s.dump("map_key_flash");
+  }
+  {
+    Scene s;
+    Fx &f = s.S.at({6, 1}).fx;
+    setFx(f, 'K');
+    f.p[0] = 9;
+    s.u.cur = {6, 1}, s.u.page = 1, s.u.sel = 1, s.u.hood = false, s.u.tileBack = M_MAP, s.u.mode = M_TILE;
+    s.dump("tile_map_fx_key");
+  }
+  {
+    Scene s;
+    Fx &f = s.S.at({6, 1}).fx;
+    setFx(f, 'M');
+    f.p[0] = 10;
+    s.u.cur = {6, 1}, s.u.page = 1, s.u.sel = 1, s.u.hood = true, s.u.tileBack = M_LINE, s.u.mode = M_TILE;
+    s.dump("tile_hood_fx_move");
+  }
   { Scene s; s.playing(); s.S.routes[2].muted = true; s.dump("map_mute"); }
   { Scene s; s.u.cur = {3, 1}; s.u.hold = 1; s.u.holdT0 = (uint32_t)-540; s.dump("clear_tile_hold"); }
   { Scene s; s.u.mode = M_LINE; s.u.lineSel = 2; s.u.hold = 2; s.u.holdT0 = (uint32_t)-540; s.dump("clear_chain_hold"); }

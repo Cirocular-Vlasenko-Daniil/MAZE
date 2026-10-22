@@ -52,8 +52,8 @@ struct FxDef {
   uint8_t def[3];    // значения по умолчанию
   const char *name;  // полное имя — подсказка в духе LSDj
 };
-constexpr int FX_N = 14;
-extern const FxDef FXDEFS[FX_N];  // A R X P I L O Z V D W T S H
+constexpr int FX_N = 16;
+extern const FxDef FXDEFS[FX_N];  // A R X P I L O Z V D W T S H K M
 const FxDef *fxDef(char code);
 int fxIndex(char code);  // -1 — нет эффекта
 int paramValue(const Param &p, uint8_t i);
@@ -98,6 +98,7 @@ struct Route {
   Cell cells[MAX_LEN];
   bool closed = false;
   uint8_t speed = 1, end = 0, ch = 1, vel = 100, gate = 50;
+  bool keyOn = true;  // транспонировать командами K и M
   // ход
   uint8_t i = 0;
   int8_t dir = 1;
@@ -151,6 +152,9 @@ int degOf(Key k, int midi);  // ступень ноты лада — сквоз�
 int midiOfDeg(Key k, int d);
 bool inKey(Key k, int midi);
 
+constexpr int8_t KEY_NONE = -128;
+constexpr uint32_t KEY_FLASH_MS = 600;
+
 struct State {
   // Тайлы — в пуле; live — где они сейчас (их двигают эффекты), src — исходник,
   // где их расставили руками (он и сохраняется). Правка тайла меняет его в пуле — в обоих.
@@ -161,6 +165,11 @@ struct State {
   bool playing = false;
   uint16_t bpm = 120;
   uint8_t scale = SCALE_CHRM, root = 0;  // лад проекта и тоника (0 — C)
+  // транспонирование фразы — игра, не проект: K (с такта) и M (сразу); сбрасывается при старте и загрузке
+  int8_t keyShift = 0;        // полутоны от тоники проекта, −6…+5
+  int8_t keyPending = KEY_NONE;  // K ждёт начала такта
+  uint8_t degShift = 0;       // ступени лада, по кругу внутри октавы
+  uint32_t keyFlashUntil = 0;  // мс: звучащая тоника вместо скорости в панели
   bool ext = false;  // клок на MIDI IN — ведомый
   uint32_t tickUs = 0;  // длина тика: своя или измеренная по внешнему клоку
   uint32_t ticks = 0;   // тиков с начала сетки
@@ -175,6 +184,7 @@ struct State {
   Tile &srcAt(int c, int r) { return pool[src[r][c]]; }
   void resetMap();  // пустая карта, тайлы на исходных местах
   Key key() const { return {scale, root}; }
+  int soundingRoot() const;  // звучащая тоника: тоника проекта, K и сдвиг M
 };
 
 uint32_t stepTicks(const Route &r);
