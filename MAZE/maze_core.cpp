@@ -465,14 +465,14 @@ void advance(Route &r) {
   if (r.jumpMode == 1) flipDir(r);
 }
 
-// пауза: указатели стоят; продолжение — сетка с начала, с тех же позиций; счёт тоже с начала
+// пауза: указатели стоят; продолжение — сетка с начала, с тех же позиций. Счёт проходов и PRE
+// паузу переживают (иначе тайлы на одном маршруте разъезжаются по фазе) — их обнуляет только
+// загрузка проекта: тайлы и маршруты там создаются заново. Транспонирование — сбрасывается.
 void restartGrid(State &S) {
   for (Route &r : S.routes) {
     r.fresh = true;
     r.acc = 0;
-    r.prevFx = -1;
   }
-  for (Tile &t : S.pool) t.fx.count = 0;
   S.keyShift = 0, S.degShift = 0, S.keyPending = KEY_NONE, S.keyFlashUntil = 0;
   S.ticks = 0;
 }

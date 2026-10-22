@@ -392,3 +392,23 @@ st.proj.field = 2;
 onEnc(st, 3);
 ok(st.root === 2 && st.scale === CHRM - 1 && st.inCh === 3, 'проекты: энкодер — тоника, лад, IN');
 print(fails ? `${fails} FAIL` : 'поля проектов: все проверки прошли');
+
+// ── пауза посреди круга: счёт TRG переживает паузу, прогрессия демо 05 не ломается
+fails = 0;
+st = makeState();
+applyProject(st, demoProject(4));
+togglePlay(st, 0);
+const barP = barMs(st);
+let tp = 0;
+for (; tp < 2.6 * barP; tp += 10) tick(st, tp);
+togglePlay(st, tp);
+tp += 1000;
+togglePlay(st, tp);
+let chP = '';
+for (const tEnd = tp + 16 * barP; tp < tEnd; tp += 10) {
+  tick(st, tp);
+  const c = A.NOTE_NAME[soundingRoot(st)][0];
+  if (chP[chP.length - 1] !== c) chP += c;
+}
+ok(chP === 'EABE', 'пауза посреди круга: E → A → B → E (' + chP + ')');
+print(fails ? `${fails} FAIL` : 'пауза: все проверки прошли');

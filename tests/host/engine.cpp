@@ -276,6 +276,22 @@ int main() {
       ticks(D, BAR_TICKS - 1);
     }
     ok(!strcmp(seq, "EABEE"), "демо 05: прогрессия E → A → B → E по 4 такта");
+    // пауза посреди круга: счёт TRG переживает паузу, порядок прогрессии не ломается
+    State Pz;
+    loadDemo(Pz, 4);
+    Pz.tickUs = internalTickUs(Pz.bpm);
+    togglePlay(Pz);
+    ticks(Pz, 250);  // 2,6 такта — кольцо на клетке 5
+    togglePlay(Pz);
+    togglePlay(Pz);
+    char ch[16] = {};
+    int cn = 0;
+    for (int k = 0; k < 16 * BAR_TICKS && cn < 15; k++) {
+      ticks(Pz, 1);
+      char c = NOTE_NAME[Pz.soundingRoot()][0];
+      if (!cn || ch[cn - 1] != c) ch[cn++] = c;
+    }
+    ok(Pz.routes[3].i != 0 && !strcmp(ch, "EABE"), "пауза посреди круга: прогрессия E → A → B → E не ломается");
   }
 
   // ── MIDI IN: ноты транспонируют фразу
