@@ -55,7 +55,7 @@ TAP is a modifier. "Hold" means hold until the bar on screen fills.
 | TAP + PAGE | projects | |
 
 **Projects screen:** TAP + encoder — slot; encoder — the selected field of the loaded project (root, scale or tempo, on the right);
-short press of the encoder button — next field; hold the encoder button — LOAD, hold TAP + encoder button — SAVE; PAGE or PLAY — back.
+TAP + PAGE — next field; hold the encoder button — LOAD, hold TAP + encoder button — SAVE; PAGE or PLAY — back.
 
 ## Install
 

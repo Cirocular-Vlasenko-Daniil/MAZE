@@ -640,7 +640,7 @@ static void drawProj(FB &fb, Ui &u, uint32_t now) {
   if (has) {
     text(fb, 44, 24, (cur ? u.autosave : u.autoF[u.projSel]) ? "AUTO" : "SAVED", 1, true);
     // тоника, лад, темп — справа: у загруженного живые и правятся энкодером (выбранное — в плашке,
-    // короткое нажатие кнопки энкодера — следующее), у остальных — записанные, тонким
+    // TAP+PAGE — следующее), у остальных — записанные, тонким
     Key k = cur ? S.key() : blobKey(u.selBlob);
     char vals[3][8];
     snprintf(vals[0], sizeof(vals[0]), "%s", NOTE_NAME[k.root]);
@@ -838,12 +838,8 @@ void Ui::onSwDown(uint32_t now) {
 
 // Кнопку энкодера отпустили раньше, чем заполнилась шкала: в проектах — отмена,
 // на карте и в линии — это было короткое нажатие, открываем правку тайла.
-void Ui::onSwUp(uint32_t now) {
-  if (mode == M_PROJ) {
-    // короткое нажатие (шкала почти не пошла) — следующее поле: тоника → лад → темп
-    if (projHold && now - projT0 < 300 && projSel == slot) projField = (projField + 1) % 3;
-    projHold = 0;
-  }
+void Ui::onSwUp(uint32_t) {
+  if (mode == M_PROJ) projHold = 0;
   if (!hold) return;
   uint8_t act = hold;
   hold = 0;
@@ -910,6 +906,10 @@ void Ui::onPageDown(uint32_t) {
     tapClean = false;
     pageUsed = true;
     openProj();  // TAP+PAGE — проекты
+  } else if (tap && mode == M_PROJ) {
+    tapClean = false;
+    pageUsed = true;
+    projField = (projField + 1) % 3;  // в проектах TAP+PAGE — следующее поле: тоника → лад → темп
   }
 }
 void Ui::onPageUp(uint32_t) {

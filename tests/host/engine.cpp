@@ -338,13 +338,17 @@ int main() {
     u.onTapDown(4121);
     u.onEnc(-5, 4122);  // назад на загруженный слот
     u.onTapUp(4123);
-    u.onSwDown(4130);
-    u.onSwUp(4140);  // короткое — следующее поле: тоника
+    u.onTapDown(4130);
+    u.onPageDown(4131);  // TAP+PAGE — следующее поле: тоника
+    u.onPageUp(4132);
+    u.onTapUp(4133);
     u.onEnc(2, 4141);
-    u.onSwDown(4150);
-    u.onSwUp(4160);  // лад
+    u.onTapDown(4150);
+    u.onPageDown(4151);  // лад
+    u.onPageUp(4152);
+    u.onTapUp(4153);
     u.onEnc(-1, 4161);
-    ok(u.projField == 1 && P.root == 2 && P.scale == SCALE_CHRM - 1 && u.slot == 0, "проекты: короткое нажатие — тоника → лад, энкодер их правит");
+    ok(u.projField == 1 && P.root == 2 && P.scale == SCALE_CHRM - 1 && u.slot == 0 && u.mode == M_PROJ, "проекты: TAP+PAGE — тоника → лад, энкодер их правит, экран не закрывается");
     u.onTapDown(4170);
     u.onEnc(5, 4171);  // снова слот 06
     u.onTapUp(4172);

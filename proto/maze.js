@@ -932,7 +932,7 @@ function drawProj(fb, S, now) {
   else if (S.queued) text(fb, 78, 8, 'BAR'); // загрузится с начала такта
   if (slot || cur) text(fb, 44, 24, (cur ? S.autosave : slot.auto) ? 'AUTO' : 'SAVED', 1, 'klaatu_light');
   // тоника, лад, темп — справа: у загруженного живые и правятся энкодером (выбранное — в плашке,
-  // короткое нажатие кнопки энкодера — следующее), у остальных — записанные, тонким
+  // TAP+PAGE — следующее), у остальных — записанные, тонким
   const d = cur ? S : slot && JSON.parse(slot.data);
   if (!d) return;
   const vals = [A.NOTE_NAME[d.root ?? 0], SCALES[d.scale ?? CHRM][0], cur && S.sync === 'EXT' ? 'EXT' : String(d.bpm)];
@@ -948,6 +948,8 @@ function drawProj(fb, S, now) {
   }
   field(2, 128 - textW(vals[2]), 24);
 }
+// поле, которое правит энкодер: тоника → лад → темп
+const nextField = S => (S.proj.field = (S.proj.field + 1) % 3);
 function openProj(S) {
   S.proj = { sel: S.slot, hold: null, back: S.mode === 'line' ? 'line' : 'map', done: 0, doneRow: 8, field: 2 };
   S.mode = 'proj';
@@ -1261,12 +1263,8 @@ function onSw(S) {
 }
 // Кнопку энкодера отпустили раньше, чем заполнилась шкала: в проектах — отмена,
 // на карте и в линии — это было короткое нажатие, открываем правку тайла.
-function onSwUp(S, now = performance.now()) {
-  if (S.mode === 'proj') {
-    // короткое нажатие (шкала почти не пошла) — следующее поле: тоника → лад → темп
-    if (S.proj.hold && now - S.proj.hold.t0 < 300 && S.proj.sel === S.slot) S.proj.field = (S.proj.field + 1) % 3;
-    S.proj.hold = null;
-  }
+function onSwUp(S) {
+  if (S.mode === 'proj') S.proj.hold = null;
   if (!S.hold) return;
   const act = S.hold.act;
   S.hold = null;
@@ -1412,6 +1410,10 @@ function bindControls() {
       setLatch(false);
       return openProj(S); // TAP+PAGE — проекты
     }
+    if (UI.tapLatch && S.mode === 'proj') {
+      setLatch(false);
+      return nextField(S); // в проектах TAP+PAGE — следующее поле
+    }
     onPageUp(S);
   });
   press($('b-left'), () => onEnc(S, -1));
@@ -1447,6 +1449,10 @@ function bindControls() {
           consumeTap();
           btn.pageUsed = true;
           openProj(S); // TAP+PAGE — проекты
+        } else if (tapHeld() && S.mode === 'proj') {
+          consumeTap();
+          btn.pageUsed = true;
+          nextField(S); // в проектах TAP+PAGE — следующее поле
         }
       }
     } else if (e.key === 'ArrowLeft') onEnc(S, -1);
