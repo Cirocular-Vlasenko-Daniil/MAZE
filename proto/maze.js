@@ -243,7 +243,7 @@ function makeState() {
   const S = {
     cols: COLS,
     rows: ROWS,
-    grid: DEMO.grid.map(row => row.map(parseNote)), // живая карта — её двигают эффекты
+    grid: null, // живая карта — её двигают эффекты
     src: null, // исходник — те же тайлы на исходных местах; он и сохраняется
     routes: [0, 1, 2, 3].map(makeRoute),
     focus: 0,
@@ -272,19 +272,24 @@ function makeState() {
     hold: null, // удержание кнопки энкодера на карте/в линии: { act, t0 }
     playHold: null, // удержание PLAY: { t0 }
   };
-  DEMO.fx.forEach(([c, r, code, cond, p, trig]) => {
-    const fx = (S.grid[r][c].fx = newFx(code, cond));
-    if (p) fx.p = p;
+  // демо-проекты идут с прошивкой и лежат в слотах 01…05, открыт первый
+  DEMOS.list.forEach((_, k) => (S.slots[k] = { data: demoProject(k), auto: false }));
+  S.demos = DEMOS.version;
+  applyProject(S, S.slots[0].data);
+  return S;
+}
+
+// демо k из assets/maze_demos.js (генерирует tools/gen_demos.py) — в формате проекта
+function demoProject(k) {
+  const d = DEMOS.list[k];
+  const src = d.grid.map(row => row.map(parseNote));
+  d.fx.forEach(([c, r, code, cond, p, trig]) => {
+    const fx = (src[r][c].fx = newFx(code, cond));
+    if (p) p.forEach((v, j) => (fx.p[j] = v));
     if (trig) fx.trig = trig;
   });
-  DEMO.routes.forEach((d, i) => {
-    const r = Object.assign(S.routes[i], { cells: cells(d.cells), closed: d.closed, speed: d.speed, end: d.end });
-    r.i = startIndex(r);
-  });
-  S.src = S.grid.map(row => [...row]);
-  S.saved = S.lastJSON = serialize(S);
-  S.slots[0] = { data: S.saved, auto: false }; // слот 01 — демо, сохранён вручную
-  return S;
+  const routes = d.routes.map((x, i) => Object.assign(makeRoute(i), { cells: cells(x.cells), closed: x.closed, speed: x.speed, end: x.end }));
+  return serialize({ src, routes, bpm: d.bpm, sync: 'INT' });
 }
 
 // ───────────────────────── проекты ─────────────────────────
@@ -361,7 +366,7 @@ function saveSlot(S, k) {
 // в браузере слоты живут в localStorage; в jsc его нет
 function persist(S) {
   try {
-    localStorage.setItem('maze.v1', JSON.stringify({ slots: S.slots, slot: S.slot }));
+    localStorage.setItem('maze.v1', JSON.stringify({ slots: S.slots, slot: S.slot, demos: S.demos }));
   } catch (e) {}
 }
 function restore(S) {
@@ -370,39 +375,15 @@ function restore(S) {
     if (!d || !d.slots) return;
     S.slots = d.slots;
     S.slot = d.slot;
+    // новая версия демо — в пустые слоты 01…05, записанное не трогаем
+    if (d.demos !== DEMOS.version) DEMOS.list.forEach((_, k) => S.slots[k] || (S.slots[k] = { data: demoProject(k), auto: false }));
+    S.demos = DEMOS.version;
     const s = S.slots[S.slot];
     applyProject(S, s ? s.data : null);
     S.autosave = !s || s.auto;
   } catch (e) {}
 }
 
-const DEMO = {
-  grid: [
-    ['C5', '-', 'E5', 'G5', '-', 'A4', '-', 'C6'],
-    ['-', 'D5', '-', 'B4', 'F#5', '-', 'B4', '-'],
-    ['G4', '-', 'C5', '-', '-', 'D#5', '-', 'E5'],
-    ['-', 'A5', '-', 'F5', 'G#4', '-', '-', 'C4'],
-  ],
-  // [столбец, ряд, эффект, условие, параметры, условие по счёту]; на тайле их не видно —
-  // только в колонке маршрута, когда сработали
-  fx: [
-    [2, 0, 'R', 'PASS', [1, 0], '1:2'], // ретчет ×3 на каждом втором проходе
-    [3, 0, 'X', 'PASS', null, 'PRE'], // акцент — только если перед этим сработал ретчет
-    [1, 1, 'A', 'PASS'], // арпеджио MAJ, 3 ноты вверх
-    [5, 2, 'D', 'MEET'], // маршруты 2 и 4 встретились — разворот
-    [7, 3, 'X', 'PASS'], // акцент +32
-    [3, 3, 'I', 'PASS'], // интервал +7
-    [6, 1, 'O', 'PASS', null, '4:4'], // каждый 4-й проход маршрута 4 — поворот соседей на 90°
-    [4, 1, 'R', 'CHNG', [2, 2]], // соседей повернули — ретчет ×4 на спад
-    [4, 3, 'W', 'PASS', [1]], // стоп 2 шага молча
-  ],
-  routes: [
-    { cells: [[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [2, 1], [1, 1], [0, 1]], closed: true, speed: 1, end: 0 },
-    { cells: [[4, 1], [4, 2], [5, 2], [6, 2], [7, 2], [7, 3]], closed: false, speed: 2, end: 1 },
-    { cells: [[0, 2], [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3]], closed: false, speed: 1, end: 0 },
-    { cells: [[5, 0], [6, 0], [7, 0], [7, 1], [6, 1], [5, 1], [5, 2]], closed: false, speed: 3, end: 2 },
-  ],
-};
 
 const tileAt = (S, p) => S.grid[p.r][p.c];
 const stepDur = (S, r) => 60 / S.bpm / 4 / SPEEDS[r.speed].m; // 1/1 = шестнадцатые

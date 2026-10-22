@@ -202,6 +202,6 @@ bool blobHasNote(const uint8_t *blob, int c, int r);
 uint16_t blobBpm(const uint8_t *blob);
 
 // демо-проект — как у прототипа
-void loadDemo(State &S);
+void loadDemo(State &S, int k = 0);  // демо-проект k (0…DEMO_N-1)
 
 }  // namespace maze

@@ -44,6 +44,9 @@ struct Store {
   virtual int current() = 0;  // загруженный слот (-1 — ещё не было)
   virtual void setCurrent(int slot) = 0;
   virtual bool ready() { return true; }  // false — флеш не смонтирован, сохранения пропадут
+  // версия демо-проектов, уже разложенных по слотам 01…; 0 — ещё не раскладывали
+  virtual int demoVersion() { return 0; }
+  virtual void setDemoVersion(int) {}
   virtual ~Store() {}
 };
 

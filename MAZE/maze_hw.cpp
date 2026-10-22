@@ -237,7 +237,7 @@ struct FileStore : Store {
     uint8_t blob[BLOB];
     bool autoFlag;
   } w[SLOTS];
-  int cur = -1, curPending = -1;
+  int cur = -1, curPending = -1, demosPending = -1;
 
   static String path(int k) {
     char b[32];
@@ -277,6 +277,14 @@ struct FileStore : Store {
   }
   void setCurrent(int k) override { cur = curPending = k; }
   bool ready() override { return ok; }
+  int demoVersion() override {
+    if (!ok) return 0;
+    File f = LittleFS.open("/maze/demos", "r");
+    int v = f ? f.read() : 0;
+    if (f) f.close();
+    return v < 0 ? 0 : v;
+  }
+  void setDemoVersion(int v) override { demosPending = v; }
   void flush() {
     if (!ok) return;
     for (int k = 0; k < SLOTS; k++) {
@@ -294,6 +302,14 @@ struct FileStore : Store {
         LittleFS.remove(path(k));
         LittleFS.rename(tmp, path(k));  // целиком или никак
         w[k].pending = false;
+      }
+    }
+    if (demosPending >= 0) {  // после слотов: оборвётся запись — демо разложатся заново
+      File f = LittleFS.open("/maze/demos", "w");
+      if (f) {
+        f.write((uint8_t)demosPending);
+        f.close();
+        demosPending = -1;
       }
     }
     if (curPending >= 0) {

@@ -15,6 +15,7 @@ SCRIPTS = [
     "tools/screens/stub.js",
     "assets/font/kaleidoscope_font.js",
     "assets/maze_assets.js",
+    "assets/maze_demos.js",
     "proto/maze.js",
     "tools/screens/scenes.js",
 ]

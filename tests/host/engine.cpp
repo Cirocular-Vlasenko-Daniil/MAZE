@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../../MAZE/maze_ui.h"
+#include "../../MAZE/maze_demos.h"
 
 using namespace maze;
 
@@ -38,6 +39,9 @@ struct MemStore : Store {
   }
   int current() override { return cur; }
   void setCurrent(int k) override { cur = k; }
+  int demoV = 0;
+  int demoVersion() override { return demoV; }
+  void setDemoVersion(int v) override { demoV = v; }
 };
 
 static void blank(State &S) {
@@ -259,10 +263,13 @@ int main() {
     u.store = &st;
     u.boot(0);
     ok(st.has[0] && !st.autoF[0] && u.slot == 0 && !u.autosave, "чистая плата: демо в слоте 01, сохранено вручную");
+    bool demos = st.demoV == DEMO_VERSION && st.writes == DEMO_N;
+    for (int k = 0; k < DEMO_N; k++) demos &= st.has[k] && !st.autoF[k];
+    ok(demos && !st.has[DEMO_N], "чистая плата: демо 01…05 разложены один раз");
     P.at({0, 0}).n = 3;
     u.update(300);
     u.update(3000);
-    ok(st.writes == 1, "ручной слот: правка не пишется сама");
+    ok(st.writes == DEMO_N, "ручной слот: правка не пишется сама");
     u.mode = M_MAP;
     u.onTapDown(4000);
     u.onPageDown(4001);  // TAP+PAGE
@@ -301,6 +308,46 @@ int main() {
     u.update(12000);
     u.update(15000);
     ok(!st.autoF[5] && u.dirty(), "после SAVE правка не пишется, видна как «+»");
+  }
+
+  // ── демо: новая версия — только в пустые слоты, записанное не трогается
+  {
+    MemStore st;
+    State P;
+    Ui u;
+    u.S = &P;
+    u.store = &st;
+    State mine;
+    newProject(mine);
+    mine.at({5, 2}).n = 9;
+    serialize(mine, st.blob[2]);
+    st.has[2] = true;  // слот 03 — проект пользователя
+    st.has[0] = true;  // слот 01 — старое демо
+    loadDemo(mine, 0);
+    serialize(mine, st.blob[0]);
+    st.cur = 2;
+    u.boot(0);
+    uint8_t d3[BLOB];
+    loadDemo(mine, 2);
+    serialize(mine, d3);
+    ok(st.writes == DEMO_N - 2 && st.has[1] && st.has[3] && st.has[4], "демо: дописаны только пустые слоты");
+    ok(memcmp(st.blob[2], d3, BLOB) != 0 && u.slot == 2 && P.at({5, 2}).n == 9, "демо: проект пользователя на месте и открыт");
+    Ui u2;
+    u2.S = &P;
+    u2.store = &st;
+    u2.boot(0);
+    ok(st.writes == DEMO_N - 2, "демо: та же версия второй раз не раскладывается");
+    bool same = true;
+    for (int k = 0; k < DEMO_N; k++) {
+      uint8_t a[BLOB], b[BLOB];
+      loadDemo(mine, k);
+      serialize(mine, a);
+      State back;
+      same &= deserialize(back, a, BLOB);
+      serialize(back, b);
+      same &= memcmp(a, b, BLOB) == 0 && blobBpm(a) == DEMOS[k].bpm;
+    }
+    ok(same, "демо: все пять сериализуются туда-обратно без потерь");
   }
 
   // ── стирание и мьют удержанием, ведомый режим

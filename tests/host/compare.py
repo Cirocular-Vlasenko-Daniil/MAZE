@@ -23,7 +23,7 @@ def parse(text):
 
 def main():
     js = subprocess.run(
-        [JSC, "tools/screens/stub.js", "assets/font/kaleidoscope_font.js", "assets/maze_assets.js", "proto/maze.js", "tools/screens/scenes.js"],
+        [JSC, "tools/screens/stub.js", "assets/font/kaleidoscope_font.js", "assets/maze_assets.js", "assets/maze_demos.js", "proto/maze.js", "tools/screens/scenes.js"],
         cwd=ROOT, capture_output=True, text=True, check=True,
     ).stdout
     with tempfile.TemporaryDirectory() as tmp:

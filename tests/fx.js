@@ -1,5 +1,5 @@
 // Проверки движка эффектов: jsc tools/screens/stub.js assets/font/kaleidoscope_font.js
-//   assets/maze_assets.js proto/maze.js tests/fx.js
+//   assets/maze_assets.js assets/maze_demos.js proto/maze.js tests/fx.js
 let fails = 0;
 function ok(cond, msg) {
   print((cond ? 'PASS ' : 'FAIL ') + msg);

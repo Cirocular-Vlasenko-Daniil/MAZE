@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "../../MAZE/maze_ui.h"
+#include "../../MAZE/maze_demos.h"
 
 using namespace maze;
 
@@ -24,6 +25,9 @@ struct MemStore : Store {
   }
   int current() override { return cur; }
   void setCurrent(int k) override { cur = k; }
+  int demoV = 0;
+  int demoVersion() override { return demoV; }
+  void setDemoVersion(int v) override { demoV = v; }
 };
 
 static uint8_t buf[512];
@@ -162,6 +166,16 @@ int main() {
     s.store.write(2, b, true);
     s.u.used[2] = s.u.autoF[2] = true;
   }, nullptr);
+  proj("proj_demo", 3, nullptr, nullptr);
+  for (int k = 1; k < DEMO_N; k++) {  // демо-проекты 02…05 — карта сразу после LOAD
+    Scene s;
+    deserialize(s.S, s.store.blob[k], BLOB);
+    s.u.slot = k;
+    s.u.cur = {0, 0};
+    char name[16];
+    snprintf(name, sizeof(name), "demo_%02d", k + 1);
+    s.dump(name);
+  }
   { Scene s; s.playing(); s.S.routes[2].muted = true; s.dump("map_mute"); }
   { Scene s; s.u.cur = {3, 1}; s.u.hold = 1; s.u.holdT0 = (uint32_t)-540; s.dump("clear_tile_hold"); }
   { Scene s; s.u.mode = M_LINE; s.u.lineSel = 2; s.u.hold = 2; s.u.holdT0 = (uint32_t)-540; s.dump("clear_chain_hold"); }

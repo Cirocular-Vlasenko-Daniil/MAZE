@@ -1,5 +1,6 @@
 // MAZE — экран и органы управления. Перенос proto/maze.js: те же пиксели, те же жесты.
 #include "maze_ui.h"
+#include "maze_demos.h"
 
 #include <stdio.h>
 
@@ -948,9 +949,25 @@ void Ui::boot(uint32_t now) {
     autoF[k] = af;
     any |= used[k];
   }
-  if (!any) {  // чистая плата — демо в слот 01, сохранено вручную
+  // демо-проекты идут с прошивкой: новая версия раскладывается по пустым слотам 01…05,
+  // записанное пользователем не трогается
+  if (store && store->demoVersion() != DEMO_VERSION) {
+    static State tmpS;  // большой — не на стек
+    for (int k = 0; k < DEMO_N && k < SLOTS; k++) {
+      if (used[k]) continue;
+      loadDemo(tmpS, k);
+      serialize(tmpS, tmp);
+      store->write(k, tmp, false);
+      used[k] = true;
+      autoF[k] = false;
+    }
+    store->setDemoVersion(DEMO_VERSION);
+    any = true;
+  }
+  if (!any) {  // без флеша — просто первое демо
     loadDemo(*S);
-    saveSlot(0);
+    serialize(*S, saved);
+    memcpy(last, saved, BLOB);
   } else {
     int k = store->current();
     if (k < 0 || k >= SLOTS) k = 0;

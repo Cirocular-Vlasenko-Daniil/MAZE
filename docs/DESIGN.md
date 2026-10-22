@@ -97,8 +97,7 @@
 - 1ST / /1ST для TRG — не обсуждали.
 - Рандомизация проектов — не обсуждали, что именно случайно (ноты, эффекты, маршруты) и каким жестом.
 - Скейл-энжин на проект: лад и тоника на весь проект, ноты тайлов приводятся к ладу (как Scale Engine в Trajectories).
-- Демо-проекты: несколько штук, каждый показывает свою механику (эффекты тайлов, условия и TRG, PONG/REV,
-  синхронизация, запуски маршрутов). Сейчас демо одно, в слоте 01.
+- Демо-проекты, часть 2: запуски маршрутов, TRIG, лад — после этих механик. Часть 1 сделана (0.3, см. «Демо-проекты»).
 - **Запуск маршрута указателем (серьёзная переделка, заменяет «связь маршрутов» EOC → LNK):** когда указатель
   одного маршрута проходит через начальную или конечную клетку другого, у второго маршрута запускается ещё один
   указатель. Так получаются сложные триггерные пульсации. Ответы пользователя (2026-10-22):
@@ -114,6 +113,18 @@
   - встреча — и в одной клетке, и когда указатели проскочили друг мимо друга в зазоре;
   - нота в клетке встречи играет, указатели гибнут после неё;
   - указатель на стопе (W, T) тоже участвует во встрече.
+
+## Демо-проекты
+
+- Пять демо в слотах 01–05, источник — `assets/demos.json`; `tools/gen_demos.py` делает из него `MAZE/maze_demos.h`
+  и `assets/maze_demos.js`, так что прошивка и прототип играют одно и то же (сцены demo_02…05 сверяются попиксельно).
+- Заливать отдельно нельзя — демо идут с прошивкой. При старте, если версия демо (`version` в json, на флеше —
+  `/maze/demos`) новее разложенной, демо пишутся в пустые слоты 01–05 как ручные сохранения; записанное
+  пользователем не трогается. На чистой плате открывается 01.
+- 01 MIX — всего понемногу (прежнее единственное демо, байт в байт). 02 MIDI — эффекты ноты A R X P I L.
+  03 MAP — O, Z, V переписывают карту. 04 COND — MEET, NEAR, CHNG, TRG 1:2 / 3:4 / PRE.
+  05 POINTER — S, D, W, T, H, PONG и REV.
+- Новое демо или правка — меняешь json, поднимаешь `version`, `python3 tools/gen_demos.py`.
 
 ## Синхронизация
 
@@ -141,7 +152,7 @@
   легато снимает предыдущую ноту после новой, афтертач — канальный (0xD0).
 - Проекты — LittleFS через `mountFiles()` SDK: `/maze/slotNN.bin` (байт флагов + проект 423 байта с CRC32),
   `/maze/current` — последний слот. Запись — вне блокировки движка, через `.tmp` и переименование.
-- На чистой плате демо пишется в слот 01 как ручное сохранение.
+- Демо-проекты идут с прошивкой, см. «Демо-проекты».
 - Собирать только с `FlashMode=dio`. Загрузчик HUB работает в DIO, и прошивка в QIO читает флеш
   мусором (`esp_flash_read`): LittleFS не монтируется, а при каждом старте раздел заново размечается.
   На старте в USB-консоль уходит строка `MAZE: files mounted, /maze ok`; если флеш не смонтирован,
@@ -153,7 +164,7 @@
 ```
 python3 tools/build_proto.py      # → proto/dist/maze_proto.html
 python3 tools/render_screens.py   # → screens/
-jsc tools/screens/stub.js assets/font/kaleidoscope_font.js assets/maze_assets.js proto/maze.js tests/fx.js
+jsc tools/screens/stub.js assets/font/kaleidoscope_font.js assets/maze_assets.js assets/maze_demos.js proto/maze.js tests/fx.js
 ```
 
 Прошивка (из папки проекта):
@@ -162,6 +173,7 @@ jsc tools/screens/stub.js assets/font/kaleidoscope_font.js assets/maze_assets.js
 g++ -std=gnu++17 -O1 -Wall tests/host/engine.cpp MAZE/maze_core.cpp MAZE/maze_ui.cpp -o /tmp/maze_engine && /tmp/maze_engine
 python3 tests/host/compare.py
 python3 tools/gen_assets.py       # → MAZE/maze_assets.h
+python3 tools/gen_demos.py        # → MAZE/maze_demos.h, assets/maze_demos.js
 python3 tools/make_cover.py       # → cover.png; затем espidi_hub.py cover cover.png > MAZE/cover.h
 arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,FlashMode=dio --output-dir build MAZE
 python3 ../ESPidi-HUB/tools/espidi_hub.py repo . --build build/MAZE.ino.bin --publish

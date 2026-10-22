@@ -137,6 +137,15 @@ const draft = st => {
   st.slots[2] = { data: serialize(st), auto: true };
 };
 projScene('proj_draft', 2, draft);
+projScene('proj_demo', 3);
+
+// демо-проекты 02…05 (assets/demos.json) — карта сразу после LOAD
+for (let k = 1; k < DEMOS.list.length; k++) {
+  const st = makeState();
+  applyProject(st, st.slots[k].data);
+  st.slot = k;
+  dump('demo_' + String(k + 1).padStart(2, '0'), st);
+}
 
 // мьют маршрута 3, стирание удержанием, ведомый режим
 m = playing(base());

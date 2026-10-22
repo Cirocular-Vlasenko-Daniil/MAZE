@@ -1,5 +1,6 @@
 // MAZE — реализация ядра. Перенос proto/maze.js: те же правила, тот же порядок действий.
 #include "maze_core.h"
+#include "maze_demos.h"
 
 #include <stdio.h>
 
@@ -544,18 +545,14 @@ void newProject(State &S) {
 bool blobHasNote(const uint8_t *blob, int c, int r) { return (int8_t)blob[TILES_AT + (r * COLS + c) * 10] >= 0; }
 uint16_t blobBpm(const uint8_t *blob) { return blob[6]; }
 
-// ── демо — как у прототипа
-void loadDemo(State &S) {
-  static const char *const grid[ROWS][COLS] = {
-      {"C5", "-", "E5", "G5", "-", "A4", "-", "C6"},
-      {"-", "D5", "-", "B4", "F#5", "-", "B4", "-"},
-      {"G4", "-", "C5", "-", "-", "D#5", "-", "E5"},
-      {"-", "A5", "-", "F5", "G#4", "-", "-", "C4"},
-  };
+// ── демо-проекты (MAZE/maze_demos.h из assets/demos.json) — как у прототипа
+void loadDemo(State &S, int k) {
+  const Demo &d = DEMOS[k];
   newProject(S);
+  S.bpm = d.bpm;
   for (int r = 0; r < ROWS; r++)
     for (int c = 0; c < COLS; c++) {
-      const char *s = grid[r][c];
+      const char *s = d.grid[r][c];
       if (s[0] == '-') continue;
       Tile &t = S.srcAt(c, r);
       bool sharp = s[1] == '#';
@@ -563,53 +560,23 @@ void loadDemo(State &S) {
         if (NOTE_LETTER[n] == s[0] && NOTE_SHARP[n] == sharp) t.n = n;
       t.o = s[sharp ? 2 : 1] - '0';
     }
-  struct D {
-    int c, r;
-    char code;
-    uint8_t cond;
-    int8_t p0, p1;
-    uint8_t trig;
-  };
-  // [столбец, ряд, эффект, условие, параметры, условие по счёту]
-  static const D fx[] = {
-      {2, 0, 'R', PASS, 1, 0, 1},     // ретчет ×3 на каждом втором проходе (1:2)
-      {3, 0, 'X', PASS, -1, -1, TRIG_PRE},  // акцент — только если перед этим сработал ретчет
-      {1, 1, 'A', PASS, -1, -1, 0},   // арпеджио MAJ, 3 ноты вверх
-      {5, 2, 'D', MEET, -1, -1, 0},   // маршруты 2 и 4 встретились — разворот
-      {7, 3, 'X', PASS, -1, -1, 0},   // акцент +32
-      {3, 3, 'I', PASS, -1, -1, 0},   // интервал +7
-      {6, 1, 'O', PASS, -1, -1, 9},   // каждый 4-й проход (4:4) — поворот соседей на 90°
-      {4, 1, 'R', CHNG, 2, 2, 0},     // соседей повернули — ретчет ×4 на спад
-      {4, 3, 'W', PASS, 1, -1, 0},    // стоп 2 шага молча
-  };
-  for (const D &d : fx) {
-    Fx &f = S.srcAt(d.c, d.r).fx;
-    setFx(f, d.code);
-    f.cond = d.cond;
-    if (d.p0 >= 0) f.p[0] = d.p0;
-    if (d.p1 >= 0) f.p[1] = d.p1;
-    f.trig = d.trig;
+  for (int i = 0; i < d.fxN; i++) {
+    const DemoFx &x = d.fx[i];
+    Fx &f = S.srcAt(x.c, x.r).fx;
+    setFx(f, x.code);
+    f.cond = x.cond;
+    for (int j = 0; j < 3; j++)
+      if (x.p[j] >= 0) f.p[j] = x.p[j];
+    f.trig = x.trig;
   }
-  struct RD {
-    int8_t cells[MAX_LEN][2];
-    uint8_t len;
-    bool closed;
-    uint8_t speed, end;
-  };
-  static const RD routes[] = {
-      {{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {3, 1}, {2, 1}, {1, 1}, {0, 1}}, 8, true, 1, 0},
-      {{{4, 1}, {4, 2}, {5, 2}, {6, 2}, {7, 2}, {7, 3}}, 6, false, 2, 1},
-      {{{0, 2}, {0, 3}, {1, 3}, {2, 3}, {3, 3}, {4, 3}, {5, 3}, {6, 3}}, 8, false, 1, 0},
-      {{{5, 0}, {6, 0}, {7, 0}, {7, 1}, {6, 1}, {5, 1}, {5, 2}}, 7, false, 3, 2},
-  };
-  for (int k = 0; k < ROUTES; k++) {
-    Route &r = S.routes[k];
-    const RD &d = routes[k];
-    r.len = d.len;
-    r.closed = d.closed;
-    r.speed = d.speed;
-    r.end = d.end;
-    for (int i = 0; i < d.len; i++) r.cells[i] = {d.cells[i][0], d.cells[i][1]};
+  for (int k2 = 0; k2 < ROUTES; k2++) {
+    Route &r = S.routes[k2];
+    const DemoRoute &x = d.routes[k2];
+    r.len = x.len;
+    r.closed = x.closed;
+    r.speed = x.speed;
+    r.end = x.end;
+    for (int i = 0; i < x.len; i++) r.cells[i] = {x.cells[i][0], x.cells[i][1]};
     r.i = startIndex(r);
   }
 }

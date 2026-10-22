@@ -25,6 +25,8 @@ Inspired by KALEIDOSCOPE (Vadjuse) and ORCA; the Klaatu pixel font comes from th
   TRG — Elektron-style A:B (1:2…8:8), PRE, /PRE.
 - **32 project slots** on flash. The source map is saved, not the result of the effects, so LOAD brings the map back.
   A draft autosaves; LOAD while playing waits for the next bar.
+- **5 demo projects** in slots 01–05, shipped with the firmware: MIX, MIDI (note effects), MAP (the map rewrites itself),
+  COND (conditions and counters), POINTER (pointer effects). They go only into empty slots, your projects stay.
 - **Sync:** internal clock with MIDI clock out, or follows MIDI clock on MIDI IN automatically (EXT); start is quantised to the next step.
 
 ![Tile editor](screens/tile_map_fx.png)
