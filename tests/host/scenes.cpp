@@ -167,6 +167,21 @@ int main() {
     s.u.used[2] = s.u.autoF[2] = true;
   }, nullptr);
   proj("proj_demo", 3, nullptr, nullptr);
+  proj("proj_key", 0, [](Scene &s) { s.S.scale = 10, s.S.root = 9; }, nullptr);
+  proj("proj_key_sel", 0, [](Scene &s) { s.S.scale = 1, s.S.root = 9; }, [](Scene &s) { s.u.projField = 1; });
+  proj("proj_key_other", 1, nullptr, nullptr);
+  {  // лад: карта демо 01 в A PMIN
+    Scene s;
+    s.S.scale = 10, s.S.root = 9;
+    s.dump("map_scale");
+  }
+  {
+    Scene s;
+    s.S.scale = 10, s.S.root = 9;
+    s.u.cur = {4, 1};
+    s.u.page = 0, s.u.sel = 0, s.u.hood = false, s.u.tileBack = M_MAP, s.u.mode = M_TILE;
+    s.dump("tile_map_note_scale");
+  }
   for (int k = 1; k < DEMO_N; k++) {  // демо-проекты 02…05 — карта сразу после LOAD
     Scene s;
     deserialize(s.S, s.store.blob[k], BLOB);

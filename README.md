@@ -17,6 +17,9 @@ Inspired by KALEIDOSCOPE (Vadjuse) and ORCA; the Klaatu pixel font comes from th
   Open routes play LOOP, PONG or REV, closed ones FWD or REV.
 - **Per route:** speed 2/1 · 1/1 · 1/2 · 1/4 · 1/8 (1/1 = sixteenths), MIDI channel, default velocity and note length, mute.
 - **Tile:** note C…B with sharps (or empty), octave 2–8, velocity, length, one effect and its condition.
+- **Scale engine:** root and scale per project — MAJ MIN DOR PHR LYD MIX LOC HMIN MMIN PMAJ PMIN or CHRM (off).
+  Notes snap to the nearest note of the scale on the map and in sound; the written note is kept, so switching scales back and forth never drifts.
+  New notes can only be picked from the scale. **I** counts scale degrees, **A** builds chords from the scale.
 - **14 effects.**
   - MIDI: **A** arpeggio, **R** ratchet, **X** accent, **P** aftertouch, **I** interval, **L** legato.
   - Map (the tiles move): **O** rotate the 8 neighbours, **Z** shift the row, **V** shift the column.
@@ -51,8 +54,8 @@ TAP is a modifier. "Hold" means hold until the bar on screen fills.
 | PAGE + encoder | tempo | |
 | TAP + PAGE | projects | |
 
-**Projects screen:** encoder — tempo of the loaded project, TAP + encoder — slot,
-hold encoder button — LOAD, hold TAP + encoder button — SAVE, PAGE or PLAY — back.
+**Projects screen:** TAP + encoder — slot; encoder — the selected field of the loaded project (root, scale or tempo, on the right);
+short press of the encoder button — next field; hold the encoder button — LOAD, hold TAP + encoder button — SAVE; PAGE or PLAY — back.
 
 ## Install
 

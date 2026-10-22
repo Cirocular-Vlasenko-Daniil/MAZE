@@ -254,7 +254,8 @@ struct FileStore : Store {
     File f = LittleFS.open(path(k), "r");
     if (!f) return false;
     uint8_t flags = 0;
-    bool good = f.size() == BLOB + 1 && f.read(&flags, 1) == 1 && f.read(blob, BLOB) == BLOB;
+    int size = (int)f.size() - 1;  // проект версии 1 — короче, без лада
+    bool good = (size == BLOB || size == BLOB_V1) && f.read(&flags, 1) == 1 && (int)f.read(blob, size) == size;
     f.close();
     autoFlag = flags & 1;
     return good;

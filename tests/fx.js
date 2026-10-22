@@ -299,3 +299,34 @@ togglePlay(st, 2010);
 ok(st.routes[0].next === 2010, 'ведущий: старт сразу');
 
 print(fails ? `${fails} FAIL` : 'стирание, мьют и синхронизация: все проверки прошли');
+
+// ── лад
+fails = 0;
+const apm = { scale: 10, root: 9 }; // A PMIN
+ok(quant(apm, 77) === 76 && quant(apm, 71) === 72 && quant(apm, 69) === 69, 'лад: F→E, B→C, A на месте');
+ok(quant({ scale: 0, root: 0 }, 66) === 65, 'лад: F# в C MAJ — вниз, к F');
+const tF = parseNote('F#5');
+ok(shown({ scale: 0, root: 0 }, tF).n === 5 && shown({ scale: CHRM, root: 0 }, tF).n === 6 && tF.n === 6, 'лад: показ F#→F, в CHRM снова F#, записанная нота не тронута');
+st = makeState();
+Object.assign(st, { scale: 0, root: 0 });
+let ns = [{ midi: 64, vel: 100, at: 0, dur: 0.1 }];
+applyFx(st, st.routes[0], { c: 0, r: 0 }, Object.assign(newFx('I'), { p: [26] }), ns, 0.1);
+ok(ns[0].midi === 67, 'лад: I +2 — две ступени (E → G)');
+ns = [{ midi: 71, vel: 100, at: 0, dur: 0.1 }];
+applyFx(st, st.routes[0], { c: 0, r: 0 }, newFx('A'), ns, 0.1);
+ok(ns.map(n => n.midi).join() === '71,74,77', 'лад: A MAJ на B в C MAJ — B D F');
+Object.assign(st, { scale: 10, root: 9 });
+ns = [{ midi: 69, vel: 100, at: 0, dur: 0.1 }];
+applyFx(st, st.routes[0], { c: 0, r: 0 }, Object.assign(newFx('A'), { p: [3, 1, 0] }), ns, 0.1);
+ok(ns.map(n => n.midi).join() === '69,72,76', 'лад: A MIN в A PMIN — A C E');
+// ноты в тайле — только из лада
+const tk = parseNote('C5');
+setKey(st, tk, 1);
+ok(tk.n === 2, 'лад: KEY в A PMIN после C — D (минуя C#)');
+setKey(st, tk, -2);
+ok(tk.n === -1, 'лад: KEY назад до пусто');
+applyProject(st, serialize(st));
+ok(st.scale === 10 && st.root === 9, 'лад: сохраняется в проекте');
+applyProject(st, JSON.stringify(Object.assign(JSON.parse(serialize(st)), { scale: undefined, root: undefined })));
+ok(st.scale === CHRM && st.root === 0, 'лад: проект без лада — CHRM');
+print(fails ? `${fails} FAIL` : 'лад: все проверки прошли');

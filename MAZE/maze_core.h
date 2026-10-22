@@ -134,6 +134,23 @@ struct TileOp {
   uint8_t a, b;  // индексы параметров
 };
 
+// ── лад. Тайл хранит ноту как записали; показывается и звучит ближайшая нота лада
+// (при равенстве — нижняя). I и A в ладу считают ступенями. CHRM — лад выключен.
+struct ScaleDef {
+  const char *name;
+  uint8_t count;
+  uint8_t iv[12];
+};
+constexpr int SCALE_N = 12, SCALE_CHRM = SCALE_N - 1;
+extern const ScaleDef SCALES[SCALE_N];
+struct Key {
+  uint8_t scale, root;
+};
+int quant(Key k, int midi);
+int degOf(Key k, int midi);  // ступень ноты лада — сквозная, через октавы
+int midiOfDeg(Key k, int d);
+bool inKey(Key k, int midi);
+
 struct State {
   // Тайлы — в пуле; live — где они сейчас (их двигают эффекты), src — исходник,
   // где их расставили руками (он и сохраняется). Правка тайла меняет его в пуле — в обоих.
@@ -143,6 +160,7 @@ struct State {
   Route routes[ROUTES];
   bool playing = false;
   uint16_t bpm = 120;
+  uint8_t scale = SCALE_CHRM, root = 0;  // лад проекта и тоника (0 — C)
   bool ext = false;  // клок на MIDI IN — ведомый
   uint32_t tickUs = 0;  // длина тика: своя или измеренная по внешнему клоку
   uint32_t ticks = 0;   // тиков с начала сетки
@@ -156,6 +174,7 @@ struct State {
   const Tile &at(Cell p) const { return pool[live[p.r][p.c]]; }
   Tile &srcAt(int c, int r) { return pool[src[r][c]]; }
   void resetMap();  // пустая карта, тайлы на исходных местах
+  Key key() const { return {scale, root}; }
 };
 
 uint32_t stepTicks(const Route &r);
@@ -193,13 +212,22 @@ void clearTile(State &S, Cell p);
 void clearRoute(Route &r);
 
 // ── проекты: исходник в двоичном виде (заголовок, данные, CRC)
-constexpr int BLOB = 4 + 2 + 1 + CELLS * 10 + ROUTES * (7 + MAX_LEN) + 4;
+// версия 2: + лад и тоника перед CRC; версия 1 (423 байта, без лада) читается как CHRM
+constexpr int BLOB_V1 = 4 + 2 + 1 + CELLS * 10 + ROUTES * (7 + MAX_LEN) + 4;
+constexpr int BLOB = BLOB_V1 + 2;
 int serialize(const State &S, uint8_t *out);  // → BLOB байт
 bool deserialize(State &S, const uint8_t *in, int len);  // false — не тот формат
 void newProject(State &S);  // пустая карта, маршрутов нет
 // миниатюра для экрана проектов: есть ли нота в клетке
 bool blobHasNote(const uint8_t *blob, int c, int r);
 uint16_t blobBpm(const uint8_t *blob);
+Key blobKey(const uint8_t *blob);
+// нота тайла в ладу — то, что видно и звучит
+struct Shown {
+  int8_t n;
+  uint8_t o;
+};
+Shown shownNote(Key k, const Tile &t);
 
 // демо-проект — как у прототипа
 void loadDemo(State &S, int k = 0);  // демо-проект k (0…DEMO_N-1)

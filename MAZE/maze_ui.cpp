@@ -51,8 +51,11 @@ static int label(FB &fb, int x, int y, const char *s) {
 static const uint8_t STRIPE[4][5] = {{0, 0, 0, 0, 0}, {1, 1, 1, 1, 1}, {1, 1, 0, 1, 1}, {1, 0, 1, 0, 1}};
 static const int BODY = 7;
 
-static int octDelta(const Tile &t) {
-  int d = t.o - OCT_BASE;
+// лад, в котором рисуем и правим ноты: render() и onEnc() ставят его из проекта
+static Key gKey = {SCALE_CHRM, 0};
+
+static int octDelta(int o) {
+  int d = o - OCT_BASE;
   return d < -3 ? -3 : d > 3 ? 3 : d;
 }
 // Буква ноты в поле 5×5 (ряды 1–5 от y). Цельные — заглавные Klaatu с точками,
@@ -76,12 +79,13 @@ static void drawNoteGlyph(FB &fb, int x0, int y, int n) {
   drawGlyph(fb, g, x, y - (bottom > 5 ? bottom - 5 : 0));
 }
 // Только буквы: эффекты на тайле не показываются, пустая клетка — точка
-static void drawTile(FB &fb, int ox, int oy, const Tile &t) {
+static void drawTile(FB &fb, int ox, int oy, const Tile &tile) {
+  Shown t = shownNote(gKey, tile);
   if (t.n < 0) {
     fb.set(ox + 3, oy + 3);
     return;
   }
-  int d = octDelta(t);
+  int d = octDelta(t.o);
   drawNoteGlyph(fb, ox, oy + (d > 0 ? 1 : d < 0 ? -1 : 0), t.n);
   if (d) {
     int row = d > 0 ? oy : oy + 6;
@@ -219,12 +223,13 @@ static void paramInfo(const Tile &t, int page, int k, PInfo &p) {
   if (page == 0) {
     static const char *const names[4] = {"KEY", "OCT", "VEL", "LEN"};
     p.name = names[k];
+    Shown sh = shownNote(gKey, t);
     if (k == 0) {
-      strcpy(p.text, t.n < 0 ? "--" : NOTE_NAME[t.n]);
+      strcpy(p.text, sh.n < 0 ? "--" : NOTE_NAME[sh.n]);
       strcpy(p.help, "NOTE NAME");
     } else if (k == 1) {
-      if (t.n < 0) strcpy(p.text, "--");
-      else snprintf(p.text, sizeof(p.text), "%d", t.o);
+      if (sh.n < 0) strcpy(p.text, "--");
+      else snprintf(p.text, sizeof(p.text), "%d", sh.o);
       strcpy(p.help, "OCTAVE");
     } else if (k == 2) {
       if (t.vel) snprintf(p.text, sizeof(p.text), "%d", t.vel);
@@ -270,8 +275,24 @@ static void paramInfo(const Tile &t, int page, int k, PInfo &p) {
 }
 static void paramSet(Tile &t, int page, int k, int d) {
   if (page == 0) {
-    if (k == 0) t.n = wrap(t.n + 1 + d, 13) - 1;
-    else if (k == 1) t.o = t.o + d < OCT_MIN ? OCT_MIN : t.o + d > OCT_MAX ? OCT_MAX : t.o + d;
+    // ноты — только из лада; правка записывает в тайл то, что видно
+    Shown sh = shownNote(gKey, t);
+    if (k == 0) {  // по кругу: пусто → ноты лада от C → пусто
+      int8_t list[13];
+      int n = 0, at = 0;
+      list[n++] = -1;
+      for (int pc = 0; pc < 12; pc++)
+        if (gKey.scale == SCALE_CHRM || inKey(gKey, pc)) {
+          if (pc == sh.n) at = n;
+          list[n++] = pc;
+        }
+      t.n = list[wrap(at + d, n)];
+      if (t.n >= 0 && sh.n >= 0) t.o = sh.o;  // из пустой — в записанную октаву
+    } else if (k == 1) {
+      int o = sh.o + d;
+      t.n = sh.n;
+      t.o = o < OCT_MIN ? OCT_MIN : o > OCT_MAX ? OCT_MAX : o;
+    }
     else if (k == 2) t.vel = listStep(VELS, VELS_N, t.vel, d);
     else t.gate = gateStep(t.gate, d);
     return;
@@ -514,11 +535,12 @@ static void drawLine(FB &fb, const Ui &u, uint32_t now) {
   if (r.muted) strcpy(buf, "MUTE");
   else snprintf(buf, sizeof(buf), "CH%02d", r.ch);
   text(fb, 100, 16, buf);
-  const Tile &t = S.at(r.cells[u.lineSel]);
+  const Tile &tile = S.at(r.cells[u.lineSel]);
+  Shown t = shownNote(S.key(), tile);
   char nm[16];
   if (t.n < 0) strcpy(nm, "---");
   else snprintf(nm, sizeof(nm), "%s%d", NOTE_NAME[t.n], t.o);
-  if (t.fx.code) snprintf(buf, sizeof(buf), "ST%02d %s %c", u.lineSel + 1, nm, t.fx.code);
+  if (tile.fx.code) snprintf(buf, sizeof(buf), "ST%02d %s %c", u.lineSel + 1, nm, tile.fx.code);
   else snprintf(buf, sizeof(buf), "ST%02d %s", u.lineSel + 1, nm);
   text(fb, 0, 24, buf);
   sprite(fb, S.playing ? PLAY_SPR : PAUSE_SPR, 5, 100, 25);
@@ -566,7 +588,7 @@ static void drawClearHold(FB &fb, const Ui &u, uint32_t now) {
   char buf[16];
   if (u.hold == 1) {
     fb.fill(PANEL - 1, 0, 128 - PANEL + 1, 32, 0);
-    const Tile &t = u.S->at(u.cur);
+    Shown t = shownNote(u.S->key(), u.S->at(u.cur));
     label(fb, PANEL, 0, "CLR");
     if (t.n < 0) strcpy(buf, "--");
     else snprintf(buf, sizeof(buf), "%s%d", NOTE_NAME[t.n], t.o);
@@ -617,15 +639,30 @@ static void drawProj(FB &fb, Ui &u, uint32_t now) {
   else if (u.queued >= 0) text(fb, 78, 8, "BAR");  // загрузится с начала такта
   if (has) {
     text(fb, 44, 24, (cur ? u.autosave : u.autoF[u.projSel]) ? "AUTO" : "SAVED", 1, true);
-    // темп: у загруженного — живой и правится энкодером, у остальных — записанный
-    if (cur && S.ext) snprintf(buf, sizeof(buf), "EXT");
-    else snprintf(buf, sizeof(buf), "%d", cur ? S.bpm : blobBpm(u.selBlob));
-    text(fb, 92, 24, buf, 1, !cur);
+    // тоника, лад, темп — справа: у загруженного живые и правятся энкодером (выбранное — в плашке,
+    // короткое нажатие кнопки энкодера — следующее), у остальных — записанные, тонким
+    Key k = cur ? S.key() : blobKey(u.selBlob);
+    char vals[3][8];
+    snprintf(vals[0], sizeof(vals[0]), "%s", NOTE_NAME[k.root]);
+    snprintf(vals[1], sizeof(vals[1]), "%s", SCALES[k.scale].name);
+    if (cur && S.ext) snprintf(vals[2], sizeof(vals[2]), "EXT");
+    else snprintf(vals[2], sizeof(vals[2]), "%d", cur ? S.bpm : blobBpm(u.selBlob));
+    auto field = [&](int i, int x, int y) {
+      if (cur && u.projField == i) label(fb, x - 1, y, vals[i]);
+      else text(fb, x, y, vals[i], 1, !cur);
+    };
+    bool busy8 = (u.projHold == 1) || ((int32_t)(u.projDone - now) > 0 && u.projDoneRow == 8) || u.queued >= 0;
+    if (!busy8) {
+      field(0, 128 - textW(vals[1]) - textW(vals[0]) - 3, 8);
+      field(1, 128 - textW(vals[1]), 8);
+    }
+    field(2, 128 - textW(vals[2]), 24);
   }
 }
 
 void Ui::render(FB &fb, uint32_t now) {
   fb.clear();
+  gKey = S->key();
   if (hold && now - holdT0 > 200 && (mode == M_MAP || mode == M_LINE)) {
     if (mode == M_LINE) drawLine(fb, *this, now);
     else {
@@ -671,6 +708,7 @@ void Ui::openTile(Mode back) {
 void Ui::openProj() {
   projSel = slot;
   projHold = 0;
+  projField = 2;
   projBack = mode == M_LINE ? M_LINE : M_MAP;
   projDone = 0;
   selCached = -1;
@@ -678,6 +716,7 @@ void Ui::openProj() {
 }
 
 void Ui::onEnc(int d, uint32_t) {
+  gKey = S->key();
   if (pageBtn) {
     pageUsed = true;
     if (!S->ext) {  // ведомому темп задают снаружи
@@ -713,9 +752,14 @@ void Ui::onEnc(int d, uint32_t) {
       if (mod) {
         projSel = wrap(projSel + d, SLOTS);
         projHold = 0;
-      } else if (projSel == slot && !S->ext) {
-        int b = S->bpm + d;
-        S->bpm = b < 40 ? 40 : b > 255 ? 255 : b;
+      } else if (projSel == slot) {
+        // энкодер — выбранное: тоника, лад или темп загруженного проекта (на чужом слоте — ничего)
+        if (projField == 0) S->root = wrap(S->root + d, 12);
+        if (projField == 1) S->scale = wrap(S->scale + d, SCALE_N);
+        if (projField == 2 && !S->ext) {
+          int b = S->bpm + d;
+          S->bpm = b < 40 ? 40 : b > 255 ? 255 : b;
+        }
       }
       break;
     case M_SETTINGS: {
@@ -794,8 +838,12 @@ void Ui::onSwDown(uint32_t now) {
 
 // Кнопку энкодера отпустили раньше, чем заполнилась шкала: в проектах — отмена,
 // на карте и в линии — это было короткое нажатие, открываем правку тайла.
-void Ui::onSwUp(uint32_t) {
-  if (mode == M_PROJ) projHold = 0;
+void Ui::onSwUp(uint32_t now) {
+  if (mode == M_PROJ) {
+    // короткое нажатие (шкала почти не пошла) — следующее поле: тоника → лад → темп
+    if (projHold && now - projT0 < 300 && projSel == slot) projField = (projField + 1) % 3;
+    projHold = 0;
+  }
   if (!hold) return;
   uint8_t act = hold;
   hold = 0;

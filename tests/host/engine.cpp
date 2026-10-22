@@ -175,6 +175,56 @@ int main() {
   applyFx(S, S.routes[0], {0, 0}, fi, ns, n, 120000);
   ok(ns[0].note == 79, "I +7: квинта вверх");
 
+  // ── лад
+  {
+    Key apm = {10, 9};  // A PMIN: A C D E G
+    ok(quant(apm, 77) == 76 && quant(apm, 71) == 72 && quant(apm, 69) == 69, "лад: F→E, B→C (ближайшая; при равенстве вниз), A на месте");
+    ok(quant({0, 0}, 66) == 65, "лад: C MAJ, F# между F и G — вниз, к F");
+    Tile t;
+    t.n = 6, t.o = 5;  // F#5
+    Shown a = shownNote({0, 0}, t), b = shownNote({SCALE_CHRM, 0}, t);
+    ok(a.n == 5 && b.n == 6 && t.n == 6, "лад: показ F#→F в C MAJ, в CHRM снова F#, записанная нота не тронута");
+    blank(S);
+    S.scale = 0, S.root = 0;  // C MAJ
+    n = 1;
+    ns[0] = {0, 1, 64, 100, 0, 60000, 0, 0};  // E4
+    Fx f2;
+    setFx(f2, 'I');
+    f2.p[0] = 26;  // +2
+    applyFx(S, S.routes[0], {0, 0}, f2, ns, n, 120000);
+    ok(ns[0].note == 67, "лад: I +2 — две ступени (E → G), не полутона");
+    n = 1;
+    ns[0] = {0, 1, 71, 100, 0, 60000, 0, 0};  // B4
+    Fx f3;
+    setFx(f3, 'A');  // MAJ, 3 ноты вверх
+    applyFx(S, S.routes[0], {0, 0}, f3, ns, n, 120000);
+    ok(n == 3 && ns[0].note == 71 && ns[1].note == 74 && ns[2].note == 77, "лад: A MAJ на B в C MAJ — трезвучие лада B D F");
+    S.scale = 10, S.root = 9;  // A PMIN
+    n = 1;
+    ns[0] = {0, 1, 69, 100, 0, 60000, 0, 0};
+    Fx f4;
+    setFx(f4, 'A');
+    f4.p[0] = 3;  // MIN
+    applyFx(S, S.routes[0], {0, 0}, f4, ns, n, 120000);
+    ok(n == 3 && ns[1].note == 72 && ns[2].note == 76, "лад: A MIN в A PMIN — A C E");
+    // старый проект (версия 1) читается как CHRM
+    uint8_t b2[BLOB];
+    serialize(S, b2);
+    b2[4] = 1;
+    uint32_t crc = 0xFFFFFFFFu;
+    for (int i = 0; i < BLOB_V1 - 4; i++) {
+      crc ^= b2[i];
+      for (int k = 0; k < 8; k++) crc = crc >> 1 ^ (0xEDB88320u & -(crc & 1));
+    }
+    crc = ~crc;
+    memcpy(b2 + BLOB_V1 - 4, &crc, 4);
+    State old;
+    ok(deserialize(old, b2, BLOB) && old.scale == SCALE_CHRM && old.root == 0, "лад: проект версии 1 загружается в CHRM");
+    State back;
+    serialize(S, b2);
+    ok(deserialize(back, b2, BLOB) && back.scale == 10 && back.root == 9, "лад: сохраняется в проекте");
+  }
+
   // ── условие по счёту
   blank(S);
   route(S, 0, {{0, 0}});
@@ -285,6 +335,19 @@ int main() {
     ok(u.projSel == 5, "проекты: TAP+энкодер — слот");
     u.onEnc(4, 4120);
     ok(P.bpm == bpm0 + 3, "проекты: на чужом слоте энкодер темп не трогает");
+    u.onTapDown(4121);
+    u.onEnc(-5, 4122);  // назад на загруженный слот
+    u.onTapUp(4123);
+    u.onSwDown(4130);
+    u.onSwUp(4140);  // короткое — следующее поле: тоника
+    u.onEnc(2, 4141);
+    u.onSwDown(4150);
+    u.onSwUp(4160);  // лад
+    u.onEnc(-1, 4161);
+    ok(u.projField == 1 && P.root == 2 && P.scale == SCALE_CHRM - 1 && u.slot == 0, "проекты: короткое нажатие — тоника → лад, энкодер их правит");
+    u.onTapDown(4170);
+    u.onEnc(5, 4171);  // снова слот 06
+    u.onTapUp(4172);
     u.onSwDown(4200);  // LOAD пустого слота 06
     u.update(4500);
     u.onSwUp(4600);

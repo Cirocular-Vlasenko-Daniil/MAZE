@@ -94,6 +94,7 @@ struct Ui {
   uint8_t projSel = 0;
   Mode projBack = M_MAP;
   uint8_t projHold = 0;  // 1 LOAD, 2 SAVE
+  uint8_t projField = 2;  // что правит энкодер: 0 тоника, 1 лад, 2 темп
   uint32_t projT0 = 0, projDone = 0;
   uint8_t projDoneRow = 8;
   int queued = -1;  // слот ждёт начала такта

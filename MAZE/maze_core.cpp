@@ -179,6 +179,49 @@ static uint32_t rnd(State &S) {  // xorshift — для RND арпеджио
 }
 
 static const int8_t CHORDS[6][4] = {{0, 12, -1, -1}, {0, 7, 12, -1}, {0, 4, 7, 12}, {0, 3, 7, 12}, {0, 5, 7, 12}, {0, 4, 7, 10}};
+// В ладу аккорд строится ступенями: интервал в полутонах ×2 (терция — 3,5 полутона, поэтому MAJ и MIN
+// дают одно трезвучие лада) переводится в ступени — round(h * ступеней / 24).
+static const int8_t CHORD_HALF[6][4] = {{0, 24, -1, -1}, {0, 14, 24, -1}, {0, 7, 14, 24}, {0, 7, 14, 24}, {0, 10, 14, 24}, {0, 7, 14, 21}};
+
+const ScaleDef SCALES[SCALE_N] = {
+    {"MAJ", 7, {0, 2, 4, 5, 7, 9, 11}}, {"MIN", 7, {0, 2, 3, 5, 7, 8, 10}}, {"DOR", 7, {0, 2, 3, 5, 7, 9, 10}},
+    {"PHR", 7, {0, 1, 3, 5, 7, 8, 10}}, {"LYD", 7, {0, 2, 4, 6, 7, 9, 11}}, {"MIX", 7, {0, 2, 4, 5, 7, 9, 10}},
+    {"LOC", 7, {0, 1, 3, 5, 6, 8, 10}}, {"HMIN", 7, {0, 2, 3, 5, 7, 8, 11}}, {"MMIN", 7, {0, 2, 3, 5, 7, 9, 11}},
+    {"PMAJ", 5, {0, 2, 4, 7, 9}},      {"PMIN", 5, {0, 3, 5, 7, 10}},     {"CHRM", 12, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
+};
+static int modp(int a, int b) { return ((a % b) + b) % b; }
+static int floorDiv(int a, int b) { return (a - modp(a, b)) / b; }
+bool inKey(Key k, int midi) {
+  const ScaleDef &sc = SCALES[k.scale];
+  int pc = modp(midi - k.root, 12);
+  for (int i = 0; i < sc.count; i++)
+    if (sc.iv[i] == pc) return true;
+  return false;
+}
+int quant(Key k, int midi) {
+  if (k.scale == SCALE_CHRM) return midi;
+  for (int d = 0; d < 12; d++) {
+    if (inKey(k, midi - d)) return midi - d;
+    if (inKey(k, midi + d)) return midi + d;
+  }
+  return midi;
+}
+int degOf(Key k, int midi) {
+  const ScaleDef &sc = SCALES[k.scale];
+  int rel = midi - k.root, pc = modp(rel, 12), idx = 0;
+  for (int i = 0; i < sc.count; i++)
+    if (sc.iv[i] == pc) idx = i;
+  return floorDiv(rel, 12) * sc.count + idx;
+}
+int midiOfDeg(Key k, int d) {
+  const ScaleDef &sc = SCALES[k.scale];
+  return k.root + floorDiv(d, sc.count) * 12 + sc.iv[modp(d, sc.count)];
+}
+Shown shownNote(Key k, const Tile &t) {
+  if (t.n < 0) return {t.n, t.o};
+  int q = quant(k, 12 * (t.o + 1) + t.n);
+  return {(int8_t)modp(q, 12), (uint8_t)(floorDiv(q, 12) - 1)};
+}
 
 void applyFx(State &S, Route &r, Cell p, const Fx &fx, Note *notes, int &n, uint32_t stepUs) {
   const FxDef *d = fxDef(fx.code);
@@ -189,7 +232,13 @@ void applyFx(State &S, Route &r, Cell p, const Fx &fx, Note *notes, int &n, uint
       Note base = notes[0];
       int8_t tones[4];
       int tn = 0;
-      for (int k = 0; k < 4 && CHORDS[fx.p[0]][k] >= 0; k++) tones[tn++] = CHORDS[fx.p[0]][k];
+      if (S.scale == SCALE_CHRM)
+        for (int k = 0; k < 4 && CHORDS[fx.p[0]][k] >= 0; k++) tones[tn++] = CHORDS[fx.p[0]][k];
+      else {  // в ладу — ступенями
+        int cnt = SCALES[S.scale].count, d0 = degOf(S.key(), base.note);
+        for (int k = 0; k < 4 && CHORD_HALF[fx.p[0]][k] >= 0; k++)
+          tones[tn++] = midiOfDeg(S.key(), d0 + (CHORD_HALF[fx.p[0]][k] * cnt + 12) / 24) - base.note;
+      }
       int8_t seq[8];
       int sn = 0;
       uint8_t dir = fx.p[2];  // UP DN UD RND
@@ -240,7 +289,8 @@ void applyFx(State &S, Route &r, Cell p, const Fx &fx, Note *notes, int &n, uint
       break;
     case 'I':
       for (int k = 0; k < n; k++) {
-        int m = notes[k].note + val(0);
+        // в ладу — ступенями
+        int m = S.scale == SCALE_CHRM ? notes[k].note + val(0) : midiOfDeg(S.key(), degOf(S.key(), notes[k].note) + val(0));
         notes[k].note = m < 0 ? 0 : m > 127 ? 127 : m;
       }
       break;
@@ -325,7 +375,7 @@ void trigger(State &S, int ri, uint32_t nowMs, Output *out) {
   uint8_t gate = t.gate ? t.gate : r.gate;
   Note notes[MAX_NOTES];
   int n = 0;
-  if (t.n >= 0) notes[n++] = {(uint8_t)ri, r.ch, (uint8_t)(12 * (t.o + 1) + t.n), vel, 0, (uint32_t)((uint64_t)stepUs * gate / 100), 0, 0};
+  if (t.n >= 0) notes[n++] = {(uint8_t)ri, r.ch, (uint8_t)quant(S.key(), 12 * (t.o + 1) + t.n), vel, 0, (uint32_t)((uint64_t)stepUs * gate / 100), 0, 0};
   if (t.fx.code) {
     // каждый проход считается; если счёт не совпал, условие не проверяется (взведённый CHNG ждёт)
     Fx &fx = t.fx;
@@ -460,7 +510,7 @@ static const int TILES_AT = 7, ROUTES_AT = TILES_AT + CELLS * 10;
 int serialize(const State &S, uint8_t *o) {
   memset(o, 0, BLOB);
   memcpy(o, "MAZE", 4);
-  o[4] = 1;  // версия формата
+  o[4] = 2;  // версия формата
   o[6] = S.bpm > 255 ? 255 : S.bpm;
   for (int r = 0; r < ROWS; r++)
     for (int c = 0; c < COLS; c++) {
@@ -489,18 +539,25 @@ int serialize(const State &S, uint8_t *o) {
     b[6] = r.gate;
     for (int i = 0; i < r.len; i++) b[7 + i] = r.cells[i].r * COLS + r.cells[i].c;
   }
+  o[BLOB - 6] = S.scale;
+  o[BLOB - 5] = S.root;
   uint32_t crc = crc32(o, BLOB - 4);
   memcpy(o + BLOB - 4, &crc, 4);
   return BLOB;
 }
 
 bool deserialize(State &S, const uint8_t *in, int len) {
-  if (len != BLOB || memcmp(in, "MAZE", 4) || in[4] != 1) return false;
+  if (len < BLOB_V1 || memcmp(in, "MAZE", 4) || in[4] < 1 || in[4] > 2) return false;
+  int size = in[4] == 1 ? BLOB_V1 : BLOB;  // версия 1 — без лада
+  if (len < size) return false;
   uint32_t crc;
-  memcpy(&crc, in + BLOB - 4, 4);
-  if (crc != crc32(in, BLOB - 4)) return false;
+  memcpy(&crc, in + size - 4, 4);
+  if (crc != crc32(in, size - 4)) return false;
   S.resetMap();
   S.bpm = in[6] ? in[6] : 120;
+  Key k = blobKey(in);
+  S.scale = k.scale;
+  S.root = k.root;
   for (int k = 0; k < CELLS; k++) {
     const uint8_t *b = in + TILES_AT + k * 10;
     Tile &t = S.pool[k];
@@ -544,12 +601,18 @@ void newProject(State &S) {
 
 bool blobHasNote(const uint8_t *blob, int c, int r) { return (int8_t)blob[TILES_AT + (r * COLS + c) * 10] >= 0; }
 uint16_t blobBpm(const uint8_t *blob) { return blob[6]; }
+Key blobKey(const uint8_t *blob) {
+  if (blob[4] < 2) return {SCALE_CHRM, 0};
+  return {(uint8_t)(blob[BLOB - 6] < SCALE_N ? blob[BLOB - 6] : SCALE_CHRM), (uint8_t)(blob[BLOB - 5] % 12)};
+}
 
 // ── демо-проекты (MAZE/maze_demos.h из assets/demos.json) — как у прототипа
 void loadDemo(State &S, int k) {
   const Demo &d = DEMOS[k];
   newProject(S);
   S.bpm = d.bpm;
+  S.scale = SCALE_CHRM;
+  S.root = 0;
   for (int r = 0; r < ROWS; r++)
     for (int c = 0; c < COLS; c++) {
       const char *s = d.grid[r][c];

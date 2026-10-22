@@ -138,6 +138,18 @@ const draft = st => {
 };
 projScene('proj_draft', 2, draft);
 projScene('proj_demo', 3);
+projScene('proj_key', 0, st => Object.assign(st, { scale: 10, root: 9 }));
+projScene('proj_key_sel', 0, Object.assign(st => Object.assign(st, { scale: 1, root: 9 }), { after: st => (st.proj.field = 1) }));
+projScene('proj_key_other', 1);
+
+// лад: та же карта демо 01 в A PMIN — ноты приведены к ладу, записанные не тронуты
+const sc = base();
+Object.assign(sc, { scale: 10, root: 9 });
+dump('map_scale', sc);
+const scT = base();
+Object.assign(scT, { scale: 10, root: 9, mode: 'tile', cur: { c: 4, r: 1 } });
+openTile(scT, 'map');
+dump('tile_map_note_scale', scT);
 
 // демо-проекты 02…05 (assets/demos.json) — карта сразу после LOAD
 for (let k = 1; k < DEMOS.list.length; k++) {

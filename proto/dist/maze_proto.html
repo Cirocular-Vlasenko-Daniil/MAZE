@@ -2188,6 +2188,55 @@ function label(fb, x, y, s) {
   return x + w + 2;
 }
 
+// ───────────────────────── лад ─────────────────────────
+// Лад и тоника — у проекта. Тайл хранит ноту как записали; показывается и звучит ближайшая
+// нота лада (при равенстве — нижняя), так что от смены лада туда-обратно ноты не уползают.
+// I и A в ладу считают ступенями. Список — как в Trajectories плюс пентатоники; CHRM — лад выключен.
+const SCALES = [
+  ['MAJ', [0, 2, 4, 5, 7, 9, 11]],
+  ['MIN', [0, 2, 3, 5, 7, 8, 10]],
+  ['DOR', [0, 2, 3, 5, 7, 9, 10]],
+  ['PHR', [0, 1, 3, 5, 7, 8, 10]],
+  ['LYD', [0, 2, 4, 6, 7, 9, 11]],
+  ['MIX', [0, 2, 4, 5, 7, 9, 10]],
+  ['LOC', [0, 1, 3, 5, 6, 8, 10]],
+  ['HMIN', [0, 2, 3, 5, 7, 8, 11]],
+  ['MMIN', [0, 2, 3, 5, 7, 9, 11]],
+  ['PMAJ', [0, 2, 4, 7, 9]],
+  ['PMIN', [0, 3, 5, 7, 10]],
+  ['CHRM', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]],
+];
+const CHRM = SCALES.length - 1;
+// лад, в котором рисуем: render() ставит его из проекта
+let KEY = { scale: CHRM, root: 0 };
+const mod = (a, b) => ((a % b) + b) % b;
+const inKey = (K, midi) => SCALES[K.scale][1].includes(mod(midi - K.root, 12));
+function quant(K, midi) {
+  if (K.scale === CHRM) return midi;
+  for (let d = 0; d < 12; d++) {
+    if (inKey(K, midi - d)) return midi - d;
+    if (inKey(K, midi + d)) return midi + d;
+  }
+  return midi;
+}
+// ступень ноты лада (сквозная, через октавы) и обратно
+function degOf(K, midi) {
+  const iv = SCALES[K.scale][1];
+  const rel = midi - K.root;
+  return Math.floor(rel / 12) * iv.length + iv.indexOf(mod(rel, 12));
+}
+function midiOfDeg(K, d) {
+  const iv = SCALES[K.scale][1];
+  return K.root + Math.floor(d / iv.length) * 12 + iv[mod(d, iv.length)];
+}
+const tileMidi = t => 12 * (t.o + 1) + t.n;
+// нота тайла в ладу: { n, o } — то, что видно и звучит
+function shown(K, t) {
+  if (t.n < 0) return t;
+  const q = quant(K, tileMidi(t));
+  return { ...t, n: mod(q, 12), o: Math.floor(q / 12) - 1 };
+}
+
 // ───────────────────────── тайл ─────────────────────────
 const octDelta = t => Math.max(-3, Math.min(3, t.o - A.OCT_BASE));
 
@@ -2204,7 +2253,8 @@ function drawNoteGlyph(fb, x0, y, n) {
 }
 
 // Только буквы: эффекты на тайле не показываются, пустая клетка — точка
-function drawTile(fb, ox, oy, t) {
+function drawTile(fb, ox, oy, tile) {
+  const t = shown(KEY, tile);
   if (t.n < 0) {
     fb.set(ox + 3, oy + 3, 1);
     return;
@@ -2365,6 +2415,8 @@ function makeState() {
     view: 'map', // куда вернуться из настроек
     playing: false,
     bpm: 120,
+    scale: CHRM, // лад проекта
+    root: 0, // тоника: 0 — C
     sync: 'INT',
     draw: null,
     tile: null, // экран тайла: { page, sel, back }
@@ -2402,7 +2454,7 @@ function demoProject(k) {
     if (trig) fx.trig = trig;
   });
   const routes = d.routes.map((x, i) => Object.assign(makeRoute(i), { cells: cells(x.cells), closed: x.closed, speed: x.speed, end: x.end }));
-  return serialize({ src, routes, bpm: d.bpm, sync: 'INT' });
+  return serialize({ src, routes, bpm: d.bpm, sync: 'INT', scale: d.scale ?? CHRM, root: d.root ?? 0 });
 }
 
 // ───────────────────────── проекты ─────────────────────────
@@ -2419,6 +2471,8 @@ function serialize(S) {
     routes: S.routes.map(r => ({ cells: r.cells.map(p => [p.c, p.r]), closed: r.closed, speed: r.speed, end: r.end, ch: r.ch, vel: r.vel, gate: r.gate })),
     bpm: S.bpm,
     sync: S.sync,
+    scale: S.scale,
+    root: S.root,
   });
 }
 // data = null — новый пустой проект
@@ -2435,6 +2489,8 @@ function applyProject(S, data, now = 0) {
     });
     S.bpm = d.bpm;
     S.sync = d.sync;
+    S.scale = d.scale ?? CHRM; // проекты до лада — хроматика
+    S.root = d.root ?? 0;
   }
   S.pending = [];
   S.saved = S.lastJSON = serialize(S);
@@ -2605,6 +2661,14 @@ function condMet(S, ri, p, t) {
 }
 
 const CHORDS = { OCT: [0, 12], '5TH': [0, 7, 12], MAJ: [0, 4, 7, 12], MIN: [0, 3, 7, 12], SUS: [0, 5, 7, 12], '7TH': [0, 4, 7, 10] };
+// В ладу аккорд строится ступенями: интервал в полутонах переводится в ступени (терция — 3,5 полутона,
+// поэтому MAJ и MIN дают одно и то же трезвучие лада). В пентатонике выходят её «трезвучия».
+const CHORD_HALF = { OCT: [0, 24], '5TH': [0, 14, 24], MAJ: [0, 7, 14, 24], MIN: [0, 7, 14, 24], SUS: [0, 10, 14, 24], '7TH': [0, 7, 14, 21] };
+function scaleChord(K, name, base) {
+  const n = SCALES[K.scale][1].length;
+  const d0 = degOf(K, base);
+  return CHORD_HALF[name].map(h => midiOfDeg(K, d0 + Math.round((h * n) / 24)) - base);
+}
 
 // MIDI-эффекты меняют ноты шага; тайловые — откладываются до следующего шага;
 // эффекты указателя меняют состояние маршрута и держатся, пока настройку не изменят.
@@ -2614,7 +2678,7 @@ function applyFx(S, r, p, fx, notes, step) {
     case 'A': {
       if (!notes.length) break;
       const base = notes[0];
-      const tones = CHORDS[v(0)];
+      const tones = S.scale === CHRM ? CHORDS[v(0)] : scaleChord(S, v(0), base.midi);
       const n = +v(1);
       const seq = { UP: tones, DN: [...tones].reverse(), UD: [...tones, ...tones.slice(1, -1).reverse()] }[v(2)];
       notes.length = 0;
@@ -2644,8 +2708,11 @@ function applyFx(S, r, p, fx, notes, step) {
         nt.shape = v(1);
       });
       break;
-    case 'I':
-      notes.forEach(nt => (nt.midi = Math.max(0, Math.min(127, nt.midi + +v(0)))));
+    case 'I': // в ладу — ступенями
+      notes.forEach(nt => {
+        const m = S.scale === CHRM ? nt.midi + +v(0) : midiOfDeg(S, degOf(S, nt.midi) + +v(0));
+        nt.midi = Math.max(0, Math.min(127, m));
+      });
       break;
     case 'L':
       notes.forEach(nt => (nt.dur = step * 1.02));
@@ -2717,7 +2784,7 @@ function trigger(S, ri, now) {
   const step = stepDur(S, r);
   const vel = t.vel ?? r.vel;
   const gate = (t.gate ?? r.gate) / 100;
-  const notes = t.n >= 0 ? [{ midi: 12 * (t.o + 1) + t.n, vel, at: 0, dur: step * gate }] : [];
+  const notes = t.n >= 0 ? [{ midi: quant(S, tileMidi(t)), vel, at: 0, dur: step * gate }] : [];
   if (t.fx) {
     // каждый проход считается; если счёт не совпал, условие не проверяется (взведённый CHNG ждёт)
     const fx = t.fx;
@@ -2834,13 +2901,23 @@ function clearAction(S) {
 const PAGES = ['NOTE', 'FX', 'COND'];
 const KEYS = ['--', ...A.NOTE_NAME];
 const FX_LIST = ['--', ...FX_ORDER];
+// KEY по кругу: пусто → ноты лада от C → пусто
+function setKey(S, t, d) {
+  const sh = shown(S, t);
+  const list = [-1, ...Array.from({ length: 12 }, (_, n) => n).filter(n => S.scale === CHRM || inKey(S, n))];
+  const i = mod(list.indexOf(sh.n) + d, list.length);
+  t.n = list[i];
+  if (t.n >= 0 && sh.n >= 0) t.o = sh.o; // из пустой — в записанную октаву
+}
 function tileParams(S, t, page) {
   const cyc = (list, cur, d) => list[(list.indexOf(cur) + d + list.length) % list.length];
   const clampIdx = (list, cur, d) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(cur) + d))];
+  const sh = shown(S, t);
   if (page === 0)
     return [
-      { name: 'KEY', text: KEYS[t.n + 1], help: 'NOTE NAME', set: d => (t.n = ((t.n + 1 + d + 13) % 13) - 1) },
-      { name: 'OCT', text: t.n < 0 ? '--' : String(t.o), help: 'OCTAVE', set: d => (t.o = Math.max(A.OCT_MIN, Math.min(A.OCT_MAX, t.o + d))) },
+      // ноты — только из лада; правка записывает в тайл то, что видно
+      { name: 'KEY', text: KEYS[sh.n + 1], help: 'NOTE NAME', set: d => setKey(S, t, d) },
+      { name: 'OCT', text: t.n < 0 ? '--' : String(sh.o), help: 'OCTAVE', set: d => Object.assign(t, { n: sh.n, o: Math.max(A.OCT_MIN, Math.min(A.OCT_MAX, sh.o + d)) }) },
       { name: 'VEL', text: t.vel == null ? 'RT' : String(t.vel), help: t.vel == null ? 'VEL FROM ROUTE' : 'VELOCITY', set: d => (t.vel = clampIdx(VELS, t.vel, d)) },
       { name: 'LEN', text: t.gate == null ? 'RT' : String(t.gate), help: t.gate == null ? 'LEN FROM ROUTE' : 'NOTE LENGTH', set: d => (t.gate = clampIdx(GATES, t.gate, d)) },
     ];
@@ -2967,12 +3044,25 @@ function drawProj(fb, S, now) {
   else if (now < P.done) text(fb, 78, P.doneRow, 'OK');
   else if (S.queued) text(fb, 78, 8, 'BAR'); // загрузится с начала такта
   if (slot || cur) text(fb, 44, 24, (cur ? S.autosave : slot.auto) ? 'AUTO' : 'SAVED', 1, 'klaatu_light');
-  // темп: у загруженного — живой и правится энкодером, у остальных — записанный
-  if (cur) text(fb, 92, 24, S.sync === 'EXT' ? 'EXT' : String(S.bpm));
-  else if (slot) text(fb, 92, 24, String(JSON.parse(slot.data).bpm), 1, 'klaatu_light');
+  // тоника, лад, темп — справа: у загруженного живые и правятся энкодером (выбранное — в плашке,
+  // короткое нажатие кнопки энкодера — следующее), у остальных — записанные, тонким
+  const d = cur ? S : slot && JSON.parse(slot.data);
+  if (!d) return;
+  const vals = [A.NOTE_NAME[d.root ?? 0], SCALES[d.scale ?? CHRM][0], cur && S.sync === 'EXT' ? 'EXT' : String(d.bpm)];
+  const field = (i, x, y) => {
+    if (cur && P.field === i) label(fb, x - 1, y, vals[i]);
+    else text(fb, x, y, vals[i], 1, cur ? 'klaatu' : 'klaatu_light');
+  };
+  const busy = row => (P.hold && (P.hold.act === 'LOAD' ? 8 : 16) === row) || (now < P.done && P.doneRow === row) || (row === 8 && S.queued);
+  const kx = 128 - textW(vals[1]) - textW(vals[0]) - 3;
+  if (!busy(8)) {
+    field(0, kx, 8);
+    field(1, 128 - textW(vals[1]), 8);
+  }
+  field(2, 128 - textW(vals[2]), 24);
 }
 function openProj(S) {
-  S.proj = { sel: S.slot, hold: null, back: S.mode === 'line' ? 'line' : 'map', done: 0, doneRow: 8 };
+  S.proj = { sel: S.slot, hold: null, back: S.mode === 'line' ? 'line' : 'map', done: 0, doneRow: 8, field: 2 };
   S.mode = 'proj';
 }
 function projAction(S, now) {
@@ -3072,7 +3162,7 @@ function drawLine(fb, S, now) {
   const x = label(fb, 0, 16, 'RT' + (S.focus + 1));
   text(fb, x + 2, 16, SPEEDS[r.speed].t + ' ' + endsOf(r)[r.end]);
   text(fb, 100, 16, r.muted ? 'MUTE' : 'CH' + String(r.ch).padStart(2, '0'));
-  const t = tileAt(S, r.cells[S.lineSel]);
+  const t = shown(S, tileAt(S, r.cells[S.lineSel]));
   const nm = t.n < 0 ? '---' : A.NOTE_NAME[t.n] + t.o;
   text(fb, 0, 24, 'ST' + String(S.lineSel + 1).padStart(2, '0') + ' ' + nm + (t.fx ? ' ' + t.fx.code : ''));
   fb.sprite(S.playing ? A.SPR.play : A.SPR.pause, 100, 25, 1);
@@ -3114,7 +3204,7 @@ function drawClearHold(fb, S, now) {
   const frac = (now - S.hold.t0) / HOLD_MS;
   if (S.hold.act === 'TILE') {
     fb.fill(PANEL - 1, 0, 128 - PANEL + 1, 32, 0);
-    const t = tileAt(S, S.cur);
+    const t = shown(S, tileAt(S, S.cur));
     label(fb, PANEL, 0, 'CLR');
     text(fb, PANEL + 26, 0, t.n < 0 ? '--' : A.NOTE_NAME[t.n] + t.o);
     holdBar(fb, PANEL + 1, 8, frac);
@@ -3141,6 +3231,7 @@ function render(fb, S, now) {
   if (S.mode === 'line') return drawLine(fb, S, now);
   if (S.mode === 'settings') return drawSettings(fb, S);
   if (S.mode === 'tile' && S.tile.layout === 'hood') return drawTileHood(fb, S, tileAt(S, S.cur));
+  KEY = S;
   if (S.mode === 'proj') return drawProj(fb, S, now);
   const opts = {};
   if (S.mode === 'draw' && !S.draw.closed) {
@@ -3219,7 +3310,12 @@ function onEnc(S, d) {
       if (mod) {
         S.proj.sel = (S.proj.sel + d + SLOTS) % SLOTS;
         S.proj.hold = null;
-      } else if (S.proj.sel === S.slot && !S.ext.on) S.bpm = Math.max(40, Math.min(255, S.bpm + d));
+      } else if (S.proj.sel === S.slot) {
+        // энкодер — выбранное: тоника, лад или темп загруженного проекта (на чужом слоте — ничего)
+        if (S.proj.field === 0) S.root = mod(S.root + d, 12);
+        if (S.proj.field === 1) S.scale = mod(S.scale + d, SCALES.length);
+        if (S.proj.field === 2 && !S.ext.on) S.bpm = Math.max(40, Math.min(255, S.bpm + d));
+      }
       break;
     case 'settings': {
       const r = S.routes[S.focus];
@@ -3278,8 +3374,12 @@ function onSw(S) {
 }
 // Кнопку энкодера отпустили раньше, чем заполнилась шкала: в проектах — отмена,
 // на карте и в линии — это было короткое нажатие, открываем правку тайла.
-function onSwUp(S) {
-  if (S.mode === 'proj') S.proj.hold = null;
+function onSwUp(S, now = performance.now()) {
+  if (S.mode === 'proj') {
+    // короткое нажатие (шкала почти не пошла) — следующее поле: тоника → лад → темп
+    if (S.proj.hold && now - S.proj.hold.t0 < 300 && S.proj.sel === S.slot) S.proj.field = (S.proj.field + 1) % 3;
+    S.proj.hold = null;
+  }
   if (!S.hold) return;
   const act = S.hold.act;
   S.hold = null;
