@@ -38,9 +38,12 @@ struct FB {
 };
 
 // Слоты проектов на флеше. В прошивке — LittleFS, на хосте — память.
+constexpr uint8_t SLOT_AUTO = 1, SLOT_DEMO = 2;
+
 struct Store {
-  virtual bool read(int slot, uint8_t *blob, bool &autoFlag) = 0;  // false — слот пуст
-  virtual bool write(int slot, const uint8_t *blob, bool autoFlag) = 0;
+  // flags: SLOT_AUTO — черновик (пишется автосохранением), SLOT_DEMO — демо, положенное прошивкой
+  virtual bool read(int slot, uint8_t *blob, uint8_t &flags) = 0;  // false — слот пуст
+  virtual bool write(int slot, const uint8_t *blob, uint8_t flags) = 0;
   virtual int current() = 0;  // загруженный слот (-1 — ещё не было)
   virtual void setCurrent(int slot) = 0;
   virtual bool ready() { return true; }  // false — флеш не смонтирован, сохранения пропадут
@@ -89,7 +92,7 @@ struct Ui {
   bool hadTapUp = false, hadSw = false;
 
   // проекты
-  bool used[SLOTS] = {}, autoF[SLOTS] = {};
+  bool used[SLOTS] = {}, autoF[SLOTS] = {}, demoF[SLOTS] = {};
   int slot = 0;
   bool autosave = false;
   uint8_t saved[BLOB], last[BLOB];
@@ -128,13 +131,14 @@ struct Ui {
 
   bool dirty() const { return memcmp(last, saved, BLOB) != 0; }
 
+  void saveSlot(int k);  // ручное сохранение (SAVE)
+
  private:
   void openTile(Mode back);
   void openProj();
   void finishDraw();
   void projAction(uint32_t now);
   void loadNow(int k, const uint8_t *blob, bool has, bool autoFlag);
-  void saveSlot(int k);
 };
 
 // для тестов и рендера сцен

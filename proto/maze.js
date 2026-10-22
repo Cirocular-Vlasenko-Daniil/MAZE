@@ -335,7 +335,7 @@ function makeState() {
     playHold: null, // удержание PLAY: { t0 }
   };
   // демо-проекты идут с прошивкой и лежат в слотах 01…05, открыт первый
-  DEMOS.list.forEach((_, k) => (S.slots[k] = { data: demoProject(k), auto: false }));
+  DEMOS.list.forEach((_, k) => (S.slots[k] = { data: demoProject(k), auto: false, demo: true }));
   S.demos = DEMOS.version;
   applyProject(S, S.slots[0].data);
   return S;
@@ -450,12 +450,20 @@ function restore(S) {
     if (!d || !d.slots) return;
     S.slots = d.slots;
     S.slot = d.slot;
-    // новая версия демо — в пустые слоты 01…05, записанное не трогаем
-    if (d.demos !== DEMOS.version) DEMOS.list.forEach((_, k) => S.slots[k] || (S.slots[k] = { data: demoProject(k), auto: false }));
+    // новая версия демо — в слоты 01…05: пустые и с прежним демо (demo: true); ручное сохранение признак
+    // снимает и не трогается. До версии демо 3 признака не было — с неё 01…05 обновляются все.
+    const fresh = d.demos !== DEMOS.version;
+    if (fresh) {
+      const legacy = (d.demos || 0) < 3;
+      DEMOS.list.forEach((_, k) => {
+        if (!S.slots[k] || S.slots[k].demo || legacy) S.slots[k] = { data: demoProject(k), auto: false, demo: true };
+      });
+    }
     S.demos = DEMOS.version;
     const s = S.slots[S.slot];
     applyProject(S, s ? s.data : null);
     S.autosave = !s || s.auto;
+    if (fresh) persist(S);
   } catch (e) {}
 }
 

@@ -625,7 +625,7 @@ static void drawProj(FB &fb, Ui &u, uint32_t now) {
   else if (cur) text(fb, 100, 0, u.dirty() ? "CUR+" : "CUR");
   // у загруженного слота — исходник как сейчас, у остальных — что записано
   if (!cur && u.selCached != u.projSel) {
-    bool af;
+    uint8_t af;
     u.selHas = u.used[u.projSel] && u.store && u.store->read(u.projSel, u.selBlob, af);
     u.selCached = u.projSel;
   }
@@ -979,10 +979,10 @@ void Ui::loadNow(int k, const uint8_t *blob, bool has, bool autoFlag) {
 }
 void Ui::saveSlot(int k) {
   serialize(*S, last);
-  if (store) store->write(k, last, false);
+  if (store) store->write(k, last, 0);  // ручное сохранение — уже не демо
   memcpy(saved, last, BLOB);
   used[k] = true;
-  autoF[k] = false;
+  autoF[k] = demoF[k] = false;
   slot = k;
   autosave = false;
   selCached = -1;
@@ -993,9 +993,9 @@ void Ui::projAction(uint32_t now) {
   projHold = 0;
   if (act == 2) saveSlot(projSel);
   else {  // LOAD — во время игры с начала следующего такта
-    bool af = false;
+    uint8_t af = 0;
     queuedHas = used[projSel] && store && store->read(projSel, queuedBlob, af);
-    queuedAuto = !queuedHas || af;
+    queuedAuto = !queuedHas || (af & SLOT_AUTO);
     queued = projSel;
   }
   projDone = now + 700;
@@ -1012,21 +1012,24 @@ void Ui::boot(uint32_t now) {
   bool any = false;
   uint8_t tmp[BLOB];
   for (int k = 0; k < SLOTS; k++) {
-    bool af = false;
+    uint8_t af = 0;
     used[k] = store && store->read(k, tmp, af);
-    autoF[k] = af;
+    autoF[k] = af & SLOT_AUTO;
+    demoF[k] = af & SLOT_DEMO;
     any |= used[k];
   }
-  // демо-проекты идут с прошивкой: новая версия раскладывается по пустым слотам 01…05,
-  // записанное пользователем не трогается
+  // демо-проекты идут с прошивкой: новая версия ложится в слоты 01…05 — в пустые и туда, где лежит
+  // прежнее демо (признак SLOT_DEMO). Ручное сохранение пользователя признак снимает — такой слот
+  // не трогается. До версии демо 3 признака не было, поэтому с неё 01…05 обновляются все.
   if (store && store->demoVersion() != DEMO_VERSION) {
     static State tmpS;  // большой — не на стек
+    bool legacy = store->demoVersion() < 3;
     for (int k = 0; k < DEMO_N && k < SLOTS; k++) {
-      if (used[k]) continue;
+      if (used[k] && !demoF[k] && !legacy) continue;
       loadDemo(tmpS, k);
       serialize(tmpS, tmp);
-      store->write(k, tmp, false);
-      used[k] = true;
+      store->write(k, tmp, SLOT_DEMO);
+      used[k] = demoF[k] = true;
       autoF[k] = false;
     }
     store->setDemoVersion(DEMO_VERSION);
@@ -1039,9 +1042,9 @@ void Ui::boot(uint32_t now) {
   } else {
     int k = store->current();
     if (k < 0 || k >= SLOTS) k = 0;
-    bool af = false;
+    uint8_t af = 0;
     bool has = used[k] && store->read(k, tmp, af);
-    loadNow(k, tmp, has, has ? af : true);
+    loadNow(k, tmp, has, has ? (af & SLOT_AUTO) : true);
   }
   inCh = store ? store->inChannel() : IN_OFF;
   lastChange = lastCheck = now;
@@ -1075,7 +1078,7 @@ void Ui::update(uint32_t now) {
     lastChange = now;
   }
   if (autosave && dirty() && now - lastChange >= AUTOSAVE_MS && store) {
-    store->write(slot, last, true);
+    store->write(slot, last, SLOT_AUTO);
     memcpy(saved, last, BLOB);
     used[slot] = autoF[slot] = true;
   }

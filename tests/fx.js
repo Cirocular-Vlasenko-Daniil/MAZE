@@ -412,3 +412,23 @@ for (const tEnd = tp + 16 * barP; tp < tEnd; tp += 10) {
 }
 ok(chP === 'EABE', 'пауза посреди круга: E → A → B → E (' + chP + ')');
 print(fails ? `${fails} FAIL` : 'пауза: все проверки прошли');
+
+// ── демо: новая версия — в 01…05 поверх прежнего демо и в пустые; ручное сохранение не трогается
+fails = 0;
+const store = {};
+globalThis.localStorage = { getItem: k => store[k] ?? null, setItem: (k, v) => (store[k] = v), removeItem: k => delete store[k] };
+const userData = serialize(Object.assign(makeState(), { bpm: 77 }));
+store['maze.v1'] = JSON.stringify({ slots: [{ data: 'old', auto: false }, null, { data: userData, auto: false }], slot: 2, demos: 1 });
+st = makeState();
+restore(st);
+ok(DEMOS.list.every((_, k) => st.slots[k].demo && st.slots[k].data === demoProject(k)) && st.slot === 2 && st.bpm === DEMOS.list[2].bpm, 'демо: до признака обновляются все 01–05');
+saveSlot(st, 2);
+st.slots[4] = null;
+store['maze.v1'] = JSON.stringify({ slots: st.slots, slot: 2, demos: 99 });
+const mine = st.slots[2].data;
+st = makeState();
+restore(st);
+ok(st.slots[2].data === mine && !st.slots[2].demo && st.slots[4].demo && st.slots[0].demo, 'демо: ручное сохранение не тронуто, пустой и прежние демо — обновлены');
+ok(JSON.parse(store['maze.v1']).demos === DEMOS.version, 'демо: версия записана');
+delete globalThis.localStorage;
+print(fails ? `${fails} FAIL` : 'демо в слотах: все проверки прошли');

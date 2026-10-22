@@ -6,5 +6,5 @@
 
 #include <ESPidiHub.h>
 
-ESPIDI_FIRMWARE("maze", "MAZE", "0.6.1", "Daniil Vlasenko");
+ESPIDI_FIRMWARE("maze", "MAZE", "0.7", "Daniil Vlasenko");
 #include "cover.h"  // из cover.png: tools/make_cover.py, затем espidi_hub.py cover cover.png

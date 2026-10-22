@@ -23,17 +23,19 @@ struct Cap : Output {
 struct MemStore : Store {
   uint8_t blob[SLOTS][BLOB];
   bool has[SLOTS] = {}, autoF[SLOTS] = {};
+  uint8_t fl[SLOTS] = {};  // флаги слота как есть (автосохранение, демо)
   int cur = -1, writes = 0;
-  bool read(int k, uint8_t *b, bool &a) override {
+  bool read(int k, uint8_t *b, uint8_t &a) override {
     if (!has[k]) return false;
     memcpy(b, blob[k], BLOB);
-    a = autoF[k];
+    a = fl[k] | (autoF[k] ? SLOT_AUTO : 0);
     return true;
   }
-  bool write(int k, const uint8_t *b, bool a) override {
+  bool write(int k, const uint8_t *b, uint8_t a) override {
     memcpy(blob[k], b, BLOB);
     has[k] = true;
-    autoF[k] = a;
+    fl[k] = a;
+    autoF[k] = a & SLOT_AUTO;
     writes++;
     return true;
   }
@@ -498,7 +500,7 @@ int main() {
     ok(!st.autoF[5] && u.dirty(), "после SAVE правка не пишется, видна как «+»");
   }
 
-  // ── демо: новая версия — только в пустые слоты, записанное не трогается
+  // ── демо: новая версия — в пустые слоты и поверх прежнего демо; ручное сохранение не трогается
   {
     MemStore st;
     State P;
@@ -508,23 +510,42 @@ int main() {
     State mine;
     newProject(mine);
     mine.at({5, 2}).n = 9;
-    serialize(mine, st.blob[2]);
-    st.has[2] = true;  // слот 03 — проект пользователя
-    st.has[0] = true;  // слот 01 — старое демо
-    loadDemo(mine, 0);
-    serialize(mine, st.blob[0]);
+    uint8_t user[BLOB];
+    serialize(mine, user);
+    // плата до признака «демо» (версия демо 1): слот 03 переписан пользователем, слот 01 — старое демо
+    memcpy(st.blob[2], user, BLOB);
+    st.has[2] = st.has[0] = true;
+    st.demoV = 1;
     st.cur = 2;
     u.boot(0);
-    uint8_t d3[BLOB];
-    loadDemo(mine, 2);
-    serialize(mine, d3);
-    ok(st.writes == DEMO_N - 2 && st.has[1] && st.has[3] && st.has[4], "демо: дописаны только пустые слоты");
-    ok(memcmp(st.blob[2], d3, BLOB) != 0 && u.slot == 2 && P.at({5, 2}).n == 9, "демо: проект пользователя на месте и открыт");
+    uint8_t d[DEMO_N][BLOB];
+    for (int k = 0; k < DEMO_N; k++) {
+      loadDemo(mine, k);
+      serialize(mine, d[k]);
+    }
+    bool all = st.writes == DEMO_N && st.demoV == DEMO_VERSION;
+    for (int k = 0; k < DEMO_N; k++) all &= !memcmp(st.blob[k], d[k], BLOB) && st.fl[k] == SLOT_DEMO;
+    ok(all && u.slot == 2 && !memcmp(u.saved, d[2], BLOB), "демо: до признака «демо» обновляются все слоты 01–05 (просьба пользователя)");
+    // дальше: ручное сохранение снимает признак — такой слот следующая версия демо не трогает
+    P.at({5, 2}).n = 9;
+    u.saveSlot(2);
+    uint8_t mineSaved[BLOB];
+    memcpy(mineSaved, st.blob[2], BLOB);
+    st.has[4] = false;  // слот 05 пуст
+    st.demoV = 99;      // разложена другая (не старая) версия
+    int w0 = st.writes;
     Ui u2;
     u2.S = &P;
     u2.store = &st;
     u2.boot(0);
-    ok(st.writes == DEMO_N - 2, "демо: та же версия второй раз не раскладывается");
+    ok(st.writes == w0 + DEMO_N - 1 && !memcmp(st.blob[2], mineSaved, BLOB) && st.fl[2] == 0, "демо: ручное сохранение в 01–05 следующая версия не трогает");
+    ok(!memcmp(st.blob[0], d[0], BLOB) && !memcmp(st.blob[4], d[4], BLOB), "демо: прежнее демо и пустой слот обновлены");
+    int w1 = st.writes;
+    Ui u3;
+    u3.S = &P;
+    u3.store = &st;
+    u3.boot(0);
+    ok(st.writes == w1, "демо: та же версия второй раз не раскладывается");
     bool same = true;
     for (int k = 0; k < DEMO_N; k++) {
       uint8_t a[BLOB], b[BLOB];

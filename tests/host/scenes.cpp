@@ -10,17 +10,19 @@ using namespace maze;
 struct MemStore : Store {
   uint8_t blob[SLOTS][BLOB];
   bool has[SLOTS] = {}, autoF[SLOTS] = {};
+  uint8_t fl[SLOTS] = {};  // флаги слота как есть (автосохранение, демо)
   int cur = -1;
-  bool read(int k, uint8_t *b, bool &a) override {
+  bool read(int k, uint8_t *b, uint8_t &a) override {
     if (!has[k]) return false;
     memcpy(b, blob[k], BLOB);
-    a = autoF[k];
+    a = fl[k] | (autoF[k] ? SLOT_AUTO : 0);
     return true;
   }
-  bool write(int k, const uint8_t *b, bool a) override {
+  bool write(int k, const uint8_t *b, uint8_t a) override {
     memcpy(blob[k], b, BLOB);
     has[k] = true;
-    autoF[k] = a;
+    fl[k] = a;
+    autoF[k] = a & SLOT_AUTO;
     return true;
   }
   int current() override { return cur; }

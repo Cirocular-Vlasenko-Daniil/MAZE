@@ -228,14 +228,14 @@ struct HwOut : Output {
 static HwOut out;
 
 // ───────────────────────── проекты в LittleFS ─────────────────────────
-// /maze/slotNN.bin — байт флагов (бит 0 — автосохранение) и проект; /maze/current — номер слота.
+// /maze/slotNN.bin — байт флагов (бит 0 — автосохранение, бит 1 — демо) и проект; /maze/current — номер слота.
 // Запись откладывается: loop() делает её вне блокировки движка, чтобы флеш не сбивал такты.
 struct FileStore : Store {
   bool ok = false;
   struct {
     bool pending;
     uint8_t blob[BLOB];
-    bool autoFlag;
+    uint8_t flags;
   } w[SLOTS];
   int cur = -1, curPending = -1, demosPending = -1, inPending = -1;
 
@@ -244,10 +244,10 @@ struct FileStore : Store {
     snprintf(b, sizeof(b), "/maze/slot%02d.bin", k + 1);
     return b;
   }
-  bool read(int k, uint8_t *blob, bool &autoFlag) override {
+  bool read(int k, uint8_t *blob, uint8_t &flagsOut) override {
     if (w[k].pending) {  // ещё не записано — отдаём то, что будет записано
       memcpy(blob, w[k].blob, BLOB);
-      autoFlag = w[k].autoFlag;
+      flagsOut = w[k].flags;
       return true;
     }
     if (!ok) return false;
@@ -257,12 +257,12 @@ struct FileStore : Store {
     int size = (int)f.size() - 1;  // проект версии 1 — короче, без лада
     bool good = (size == BLOB || size == BLOB_V1) && f.read(&flags, 1) == 1 && (int)f.read(blob, size) == size;
     f.close();
-    autoFlag = flags & 1;
+    flagsOut = flags;
     return good;
   }
-  bool write(int k, const uint8_t *blob, bool autoFlag) override {
+  bool write(int k, const uint8_t *blob, uint8_t flags) override {
     memcpy(w[k].blob, blob, BLOB);
-    w[k].autoFlag = autoFlag;
+    w[k].flags = flags;
     w[k].pending = true;
     return true;
   }
@@ -304,7 +304,7 @@ struct FileStore : Store {
         esp_rom_printf("MAZE: can't write %s\n", tmp.c_str());
         continue;
       }
-      uint8_t flags = w[k].autoFlag ? 1 : 0;
+      uint8_t flags = w[k].flags;
       bool good = f.write(&flags, 1) == 1 && f.write(w[k].blob, BLOB) == BLOB;
       f.close();
       if (good) {

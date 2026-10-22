@@ -31,7 +31,7 @@ Inspired by KALEIDOSCOPE (Vadjuse) and ORCA; the Klaatu pixel font comes from th
 - **32 project slots** on flash. The source map is saved, not the result of the effects, so LOAD brings the map back.
   A draft autosaves; LOAD while playing waits for the next bar.
 - **5 demo projects** in slots 01–05, shipped with the firmware: MIX, MIDI (note effects), MAP (the map rewrites itself),
-  COND (conditions and counters), POINTER (pointer effects and a key progression E → A → B → E, 4 bars each). They go only into empty slots, your projects stay.
+  COND (conditions and counters), POINTER (pointer effects and a key progression E → A → B → E, 4 bars each). A new firmware updates them in place; a slot you SAVE over is yours and stays.
 - **Transpose from MIDI IN:** a keyboard or another sequencer moves the whole phrase, like **K** but right away.
   Latched, with octaves (the project tonic in octave 4 is home), the lowest held key wins. The input channel (IN: OFF, ALL, 1–16)
   belongs to the device, not to the project. Notes from MIDI IN never sound themselves.

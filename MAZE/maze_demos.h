@@ -27,7 +27,7 @@ struct Demo {
   DemoRoute routes[ROUTES];
 };
 
-constexpr uint8_t DEMO_VERSION = 2;
+constexpr uint8_t DEMO_VERSION = 3;
 constexpr int DEMO_N = 5;
 
 inline const DemoFx DEMO_FX_0[] = {
